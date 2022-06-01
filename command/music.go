@@ -1,11 +1,18 @@
 package command
 
 import (
-	"log"
+	"encoding/binary"
+	"io"
 	"os"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/hajimehoshi/go-mp3"
+	"layeh.com/gopus"
+)
+
+var (
+	AudioFrameSize int = 960
+	Channels       int = 2
 )
 
 func HandleTell(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
@@ -33,34 +40,59 @@ func HandleTell(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 	}
 	// Any error handling past here must close the voice channel connection
 
-	buffer, err := LoadClip("botsounds/output.mp3")
+	vc.Speaking(true)
+	err = LoadAndPlay(vc, "botsounds/output.mp3")
 	if err != nil {
 		vc.Disconnect()
 		return err
 	}
-	log.Println(buffer)
-
-	vc.Speaking(true)
-	// Playing sound here
 	vc.Speaking(false)
 
 	vc.Disconnect()
 	return nil
 }
 
-func LoadClip(filename string) ([]byte, error) {
-	var buffer []byte
+func LoadAndPlay(vc *discordgo.VoiceConnection, filename string) error {
 	file, err := os.Open(filename)
 	if err != nil {
-		return buffer, err
+		return err
 	}
 	defer file.Close()
 
+	// Read mp3 data
 	decoder, err := mp3.NewDecoder(file)
 	if err != nil {
-		return buffer, err
+		return err
 	}
-	decoder.Read(buffer)
+	samplerate := decoder.SampleRate()
 
-	return buffer, nil
+	var inputAudio [][]int16
+	// Break up into opus frames
+	for {
+		buffer := make([]int16, AudioFrameSize*Channels)
+		err := binary.Read(decoder, binary.LittleEndian, &buffer)
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		inputAudio = append(inputAudio, buffer)
+	}
+
+	// Encode with opus and send
+	enc, err := gopus.NewEncoder(samplerate, Channels, gopus.Audio)
+	if err != nil {
+		return err
+	}
+	enc.SetBitrate(64 * 1000)
+	for i := 0; i < len(inputAudio); i++ {
+		opus, err := enc.Encode(inputAudio[i], AudioFrameSize, AudioFrameSize*Channels*2)
+		if err != nil {
+			return err
+		}
+		vc.OpusSend <- opus
+	}
+
+	return nil
 }

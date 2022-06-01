@@ -9,4 +9,5 @@ require (
 	github.com/hajimehoshi/go-mp3 v0.3.3 // indirect
 	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b // indirect
 	golang.org/x/sys v0.0.0-20201119102817-f84b799fce68 // indirect
+	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32 // indirect
 )
