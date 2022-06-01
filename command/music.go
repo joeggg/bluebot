@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	AudioFrameSize int = 960
-	Channels       int = 2
+	FrameSize  int = 960
+	Channels   int = 1
+	SampleRate int = 48000
 )
 
 func HandleTell(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
@@ -64,12 +65,11 @@ func LoadAndPlay(vc *discordgo.VoiceConnection, filename string) error {
 	if err != nil {
 		return err
 	}
-	samplerate := decoder.SampleRate()
 
 	var inputAudio [][]int16
 	// Break up into opus frames
 	for {
-		buffer := make([]int16, AudioFrameSize*Channels)
+		buffer := make([]int16, FrameSize*Channels)
 		err := binary.Read(decoder, binary.LittleEndian, &buffer)
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			break
@@ -81,13 +81,13 @@ func LoadAndPlay(vc *discordgo.VoiceConnection, filename string) error {
 	}
 
 	// Encode with opus and send
-	enc, err := gopus.NewEncoder(samplerate, Channels, gopus.Audio)
+	enc, err := gopus.NewEncoder(SampleRate, Channels, gopus.Audio)
 	if err != nil {
 		return err
 	}
 	enc.SetBitrate(64 * 1000)
 	for i := 0; i < len(inputAudio); i++ {
-		opus, err := enc.Encode(inputAudio[i], AudioFrameSize, AudioFrameSize*Channels*2)
+		opus, err := enc.Encode(inputAudio[i], FrameSize, FrameSize*Channels*2)
 		if err != nil {
 			return err
 		}
