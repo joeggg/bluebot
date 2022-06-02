@@ -72,6 +72,13 @@ func HandleYT(session *discordgo.Session, msg *discordgo.MessageCreate, args []s
 	if err != nil {
 		return err
 	}
+	log.Println("Downloading audio file")
+	file, err := SaveWebMStream(stream)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	defer os.Remove("test.webm")
 
 	vc, err := JoinAuthorVoiceChannel(session, msg)
 	if err != nil {
@@ -79,7 +86,7 @@ func HandleYT(session *discordgo.Session, msg *discordgo.MessageCreate, args []s
 	}
 	// Any error handling past here must close the voice channel connection
 	vc.Speaking(true)
-	err = PlayWebMStream(vc, stream)
+	err = PlayWebMFile(vc, file)
 	if err != nil {
 		vc.Disconnect()
 		return err
@@ -133,25 +140,24 @@ func JoinAuthorVoiceChannel(session *discordgo.Session, msg *discordgo.MessageCr
 	return vc, nil
 }
 
-func PlayWebMStream(vc *discordgo.VoiceConnection, stream io.ReadCloser) error {
+func SaveWebMStream(stream io.ReadCloser) (*os.File, error) {
 	// Save to file first
+	var file *os.File
 	first, err := os.Create("test.webm")
 	if err != nil {
-		return err
+		return file, err
 	}
 	_, err = io.Copy(first, stream)
 	if err != nil {
-		return err
+		return file, err
 	}
 	first.Close()
 	// Reopen needed for some reason
-	file, err := os.Open("test.webm")
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	defer os.Remove("test.webm")
+	file, err = os.Open("test.webm")
+	return file, err
+}
 
+func PlayWebMFile(vc *discordgo.VoiceConnection, file *os.File) error {
 	// Parse webm
 	var w webm.WebM
 	wr, err := webm.Parse(file, &w)
