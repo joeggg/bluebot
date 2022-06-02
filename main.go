@@ -3,6 +3,7 @@ package main
 import (
 	"bluebot/command"
 	"bluebot/config"
+	"bluebot/util"
 	"log"
 	"os"
 	"os/signal"
@@ -13,10 +14,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type HandlerFunc func(*discordgo.Session, *discordgo.MessageCreate, []string) error
-
 // Mapping of commands to handler functions
-var commands = map[string]HandlerFunc{
+var commands = map[string]util.HandlerFunc{
 	"tell": command.HandleTell,
 	"say":  command.HandleSay,
 	"yt":   command.HandleYT,
@@ -38,7 +37,7 @@ func MessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 	if handler, ok := commands[command]; ok {
 		start := time.Now()
 		err := handler(session, msg, args)
-		log.Printf("%s took %ss", command, time.Since(start))
+		log.Printf("%s took %s", command, time.Since(start))
 		// Any errors returned cause internal server error message
 		// Handle errors more specifically if needed within the handler function
 		if err != nil {
