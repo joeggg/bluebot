@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -18,6 +19,7 @@ type HandlerFunc func(*discordgo.Session, *discordgo.MessageCreate, []string) er
 var commands = map[string]HandlerFunc{
 	"tell": command.HandleTell,
 	"say":  command.HandleSay,
+	"yt":   command.HandleYT,
 }
 
 func MessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
@@ -34,7 +36,9 @@ func MessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 
 	// Check command exists and run its handler if so
 	if handler, ok := commands[command]; ok {
+		start := time.Now()
 		err := handler(session, msg, args)
+		log.Printf("%s took %ss", command, time.Since(start))
 		// Any errors returned cause internal server error message
 		// Handle errors more specifically if needed within the handler function
 		if err != nil {
