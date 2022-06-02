@@ -135,16 +135,17 @@ func JoinAuthorVoiceChannel(session *discordgo.Session, msg *discordgo.MessageCr
 
 func PlayWebMStream(vc *discordgo.VoiceConnection, stream io.ReadCloser) error {
 	// Save to file first
-	file, err := os.Create("test.webm")
+	first, err := os.Create("test.webm")
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(file, stream)
+	_, err = io.Copy(first, stream)
 	if err != nil {
 		return err
 	}
-	file.Close()
-	file, err = os.Open("test.webm")
+	first.Close()
+	// Reopen needed for some reason
+	file, err := os.Open("test.webm")
 	if err != nil {
 		return err
 	}
@@ -160,7 +161,8 @@ func PlayWebMStream(vc *discordgo.VoiceConnection, stream io.ReadCloser) error {
 	// Read data from parsed webm
 	for {
 		// Weird sleep needed to not be faster than the parsing
-		time.Sleep(10 * time.Microsecond)
+		// Shouldn't matter as packets are 20ms long
+		time.Sleep(time.Millisecond)
 		select {
 		case packet, ok := <-wr.Chan:
 			if !ok {
