@@ -23,7 +23,13 @@ func HandleTell(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 	}
 	defer file.Close()
 
-	vc, err := JoinAuthorVoiceChannel(session, msg)
+	voiceChannelID := GetAuthorVoiceChannel(session, msg)
+	if voiceChannelID == "" {
+		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
+		return nil
+	}
+	// Join voice channel and start websocket audio communication
+	vc, err := session.ChannelVoiceJoin(msg.GuildID, voiceChannelID, false, true)
 	if err != nil {
 		return err
 	}

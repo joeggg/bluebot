@@ -2,9 +2,13 @@ package command
 
 import (
 	"bluebot/util"
+	"context"
+	"crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -20,8 +24,23 @@ var (
 	SampleRate int = 48000
 )
 
-var subscriptions = make(map[string]chan string)
+type Subscription struct {
+	queue     []*youtube.Video    // All videos in queue, downloaded or not, needed for displaying queue
+	events    chan string         // Event queue
+	downloads chan *youtube.Video // To download queue
+	tracks    chan *Track         // Downloaded tracks queue
+}
+
+type Track struct {
+	filename string
+	title    string
+}
+
+var subscriptions = make(map[string]*Subscription)
 var subCommands = map[string]util.HandlerFunc{
+	"queue":  HandleQueue,
+	"list":   HandleList,
+	"next":   HandleEvent,
 	"play":   HandlePlay,
 	"pause":  HandleEvent,
 	"resume": HandleEvent,
@@ -41,88 +60,156 @@ func HandleYT(session *discordgo.Session, msg *discordgo.MessageCreate, args []s
 	Download and play the audio of a video from YouTube
 */
 func HandlePlay(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
-	if _, ok := subscriptions[msg.Author.ID]; ok {
+	voiceChannelID := GetAuthorVoiceChannel(session, msg)
+	if voiceChannelID == "" {
+		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
+		return nil
+	}
+
+	if _, ok := subscriptions[voiceChannelID]; ok {
 		session.ChannelMessageSend(msg.ChannelID, "Already playing music")
 		return nil
 	}
-	url := args[1]
-	filename, err := DownloadAudio(url)
-	if err != nil {
-		return err
-	}
 
-	file, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	defer os.Remove(filename)
-
-	eventChan := make(chan string)
 	log.Printf("Creating subscription for user %s", msg.Author.Username)
-	subscriptions[msg.Author.ID] = eventChan
-	vc, err := JoinAuthorVoiceChannel(session, msg)
+	sub := &Subscription{
+		[]*youtube.Video{},
+		make(chan string),
+		make(chan *youtube.Video, 50),
+		make(chan *Track, 50),
+	}
+	subscriptions[voiceChannelID] = sub
+	defer delete(subscriptions, voiceChannelID)
+	err := AddToQueue(session, msg, sub, args[1])
 	if err != nil {
 		return err
 	}
+
+	// File download manager
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go ManageFileQueue(ctx, sub)
+
+	// Join voice channel and start websocket audio communication
+	vc, err := session.ChannelVoiceJoin(msg.GuildID, voiceChannelID, false, true)
+	if err != nil {
+		return err
+	}
+	defer vc.Disconnect()
 	// Any error handling past here must close the voice channel connection
 	vc.Speaking(true)
-	log.Println("Playing track")
-	err = PlayWebMFile(session, msg, vc, eventChan, file)
+	log.Printf("Starting playing for user %s", msg.Author.Username)
+	err = PlayWebMFileQueue(session, msg, vc, sub)
 	if err != nil {
-		vc.Disconnect()
 		return err
 	}
 
 	vc.Speaking(false)
-	vc.Disconnect()
+	session.ChannelMessageSend(msg.ChannelID, "Stopping playing")
 	log.Printf("Removing subscription for user %s", msg.Author.Username)
-	delete(subscriptions, msg.Author.ID)
+	return nil
+}
+
+func HandleQueue(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	voiceChannelID := GetAuthorVoiceChannel(session, msg)
+	if _, ok := subscriptions[voiceChannelID]; !ok {
+		return HandlePlay(session, msg, args)
+	}
+	sub := subscriptions[voiceChannelID]
+
+	err := AddToQueue(session, msg, sub, args[1])
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func HandleList(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	voiceChannelID := GetAuthorVoiceChannel(session, msg)
+	if _, ok := subscriptions[voiceChannelID]; !ok {
+		session.ChannelMessageSend(msg.ChannelID, "No music playing")
+		return nil
+	}
+
+	output := ""
+	for i, video := range subscriptions[voiceChannelID].queue {
+		output += fmt.Sprintf("%d - %s\n", i, video.Title)
+	}
+	session.ChannelMessageSend(msg.ChannelID, output)
 	return nil
 }
 
 func HandleEvent(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
-	if _, ok := subscriptions[msg.Author.ID]; !ok {
+	voiceChannelID := GetAuthorVoiceChannel(session, msg)
+	if _, ok := subscriptions[voiceChannelID]; !ok {
 		session.ChannelMessageSend(msg.ChannelID, "No music playing")
 		return nil
 	}
-	subscriptions[msg.Author.ID] <- args[0]
+	subscriptions[voiceChannelID].events <- args[0]
 	return nil
 }
 
-func DownloadAudio(url string) (string, error) {
-	var filename string
+/*
+	Add a video or playlist to queue
+*/
+func AddToQueue(
+	session *discordgo.Session, msg *discordgo.MessageCreate, sub *Subscription, url string,
+) error {
 	client := youtube.Client{}
-
-	video, err := client.GetVideo(url)
-	if err != nil {
-		return filename, err
+	if playlist, err := client.GetPlaylist(url); err == nil {
+		for _, item := range playlist.Videos {
+			video, err := client.GetVideo(item.ID)
+			if err != nil {
+				continue
+			}
+			// Add to queue list and download channel
+			sub.queue = append(sub.queue, video)
+			sub.downloads <- video
+			session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Adding track [ %s ] to queue", video.Title))
+		}
+		return nil
+	} else if video, err := client.GetVideo(url); err == nil {
+		sub.queue = append(sub.queue, video)
+		sub.downloads <- video
+		session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Adding track [ %s ] to queue", video.Title))
+		return nil
+	} else {
+		return err
 	}
+}
 
+func DownloadAudio(video *youtube.Video) (*Track, error) {
 	format, err := GetFirstOpusFormat(&video.Formats)
 	if err != nil {
-		return filename, err
+		return nil, err
 	}
 
 	log.Println("Downloading audio file")
+	client := youtube.Client{}
 	stream, _, err := client.GetStream(video, format)
 	if err != nil {
-		return filename, err
+		return nil, err
 	}
 
-	filename = video.ID + ".webm"
+	// Create unique file name
+	num, err := rand.Int(rand.Reader, big.NewInt(10000))
+	if err != nil {
+		return nil, err
+	}
+	filename := fmt.Sprintf("%s-%s.webm", video.ID, num)
 	// Must save to file for webm decoder
 	file, err := os.Create(filename)
 	if err != nil {
-		return filename, err
+		return nil, err
 	}
 	defer file.Close()
 	_, err = io.Copy(file, stream)
 	if err != nil {
-		return filename, err
+		return nil, err
 	}
 
-	return filename, nil
+	return &Track{filename, video.Title}, nil
 }
 
 /*
@@ -141,74 +228,111 @@ func GetFirstOpusFormat(formats *youtube.FormatList) (*youtube.Format, error) {
 /*
 	Find if a the message author is in a channel and join it
 */
-func JoinAuthorVoiceChannel(session *discordgo.Session, msg *discordgo.MessageCreate) (*discordgo.VoiceConnection, error) {
-	var vc *discordgo.VoiceConnection
+func GetAuthorVoiceChannel(session *discordgo.Session, msg *discordgo.MessageCreate) string {
 	// Find sender's voice channel
 	guild, err := session.State.Guild(msg.GuildID)
 	if err != nil {
-		return vc, err
+		return ""
 	}
-	voicechannelID := ""
 	for _, vs := range guild.VoiceStates {
 		if vs.UserID == msg.Author.ID {
-			voicechannelID = vs.ChannelID
-			break
+			return vs.ChannelID
 		}
 	}
-	if voicechannelID == "" {
-		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
-		return vc, nil
-	}
-
-	// Join voice channel and start websocket audio communication
-	vc, err = session.ChannelVoiceJoin(msg.GuildID, voicechannelID, false, true)
-	if err != nil {
-		return vc, err
-	}
-	return vc, nil
+	return ""
 }
 
-func PlayWebMFile(session *discordgo.Session, msg *discordgo.MessageCreate, vc *discordgo.VoiceConnection, ch chan string, file *os.File) error {
-	// Parse webm
-	var w webm.WebM
-	wr, err := webm.Parse(file, &w)
-	if err != nil {
-		return err
-	}
-	// Read opus data from parsed webm and pass into sending channel
+func ManageFileQueue(ctx context.Context, sub *Subscription) {
 	for {
-		// Weird sleep needed to not be faster than the parsing
-		// Shouldn't matter as packets are 20ms long
-		time.Sleep(100 * time.Microsecond)
+		// Only download 2 tracks in advance
+		for len(sub.tracks) > 1 {
+			time.Sleep(time.Millisecond)
+		}
 		select {
-		case event := <-ch:
-			switch event {
-			case "pause":
-				WaitForResume(ch)
-			case "stop":
-				session.ChannelMessageSend(msg.ChannelID, "Stopping playing")
-				return nil
-			default:
+		// Get video metadata from queue and download the audio file
+		case video := <-sub.downloads:
+			track, err := DownloadAudio(video)
+			if err != nil {
+				log.Printf("Failed to download file for %s", video.Title)
 				continue
 			}
-		// Send the opus data
-		case packet, ok := <-wr.Chan:
-			if !ok {
-				return nil
-			}
-			vc.OpusSend <- packet.Data
+			sub.tracks <- track
+
+		case <-ctx.Done():
+			log.Println("Closing file download manager")
+			return
+
 		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+}
+
+func PlayWebMFileQueue(session *discordgo.Session, msg *discordgo.MessageCreate, vc *discordgo.VoiceConnection, sub *Subscription) error {
+	for {
+		// Iterate over the queue
+		select {
+		case track := <-sub.tracks:
+			file, err := os.Open(track.filename)
+			if err != nil {
+				return err
+			}
+
+			// Parse webm
+			var w webm.WebM
+			wr, err := webm.Parse(file, &w)
+			if err != nil {
+				return err
+			}
+			session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Playing track [ %s ]", track.title))
+			// Read opus data from parsed webm and pass into sending channel
+			playing := true
+			for playing {
+				select {
+				// Check for events
+				case event := <-sub.events:
+					switch event {
+					case "next":
+						playing = false
+					case "pause":
+						quit := WaitForResume(sub.events)
+						if quit {
+							return nil
+						}
+					case "stop":
+						return nil
+					default:
+						continue
+					}
+				// Send the opus data
+				case packet, ok := <-wr.Chan:
+					if !ok {
+						playing = false
+					}
+					vc.OpusSend <- packet.Data
+				case <-time.After(time.Second):
+					playing = false
+				}
+			}
+			// Cleanup file and queue list
+			file.Close()
+			os.Remove(track.filename)
+			sub.queue = sub.queue[1:]
+		// Wait 5 seconds after queue is empty in case of delay/adding more tracks
+		case <-time.After(5 * time.Second):
 			return nil
 		}
 	}
 }
 
-func WaitForResume(ch chan string) {
+func WaitForResume(ch chan string) bool {
 	for {
 		select {
 		case event := <-ch:
 			if event == "resume" {
-				return
+				return false
+			} else if event == "stop" {
+				return true
 			}
 			time.Sleep(time.Millisecond * 500)
 		default:
