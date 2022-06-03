@@ -133,7 +133,7 @@ func (sub *Subscription) ManageDownloads(ctx context.Context) {
 	for {
 		// Only download 2 tracks in advance
 		for len(sub.Tracks) > 1 {
-			time.Sleep(time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 		}
 		select {
 		// Get video metadata from queue and download the audio file
@@ -150,7 +150,7 @@ func (sub *Subscription) ManageDownloads(ctx context.Context) {
 			return
 
 		default:
-			time.Sleep(time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
 }
