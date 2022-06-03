@@ -3,17 +3,12 @@ package command
 import (
 	"bluebot/util"
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"io"
 	"log"
-	"math/big"
 	"os"
-	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/kkdai/youtube/v2"
 )
 
 var subCommands = map[string]util.HandlerFunc{
@@ -26,11 +21,15 @@ var subCommands = map[string]util.HandlerFunc{
 	"stop":   HandleEvent,
 }
 
+/*
+	Handle any music related command
+*/
 func HandleYT(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
 	if len(args) < 1 {
 		session.ChannelMessageSend(msg.ChannelID, "Invalid yt command")
 		return nil
 	}
+
 	if subCommand, ok := subCommands[args[0]]; !ok {
 		session.ChannelMessageSend(msg.ChannelID, "Unknown music command")
 		return nil
@@ -40,13 +39,9 @@ func HandleYT(session *discordgo.Session, msg *discordgo.MessageCreate, args []s
 }
 
 /*
-	Download and play the audio of a video from YouTube
+	Begin the download and playback of audio from a YT video or playlist link
 */
 func HandlePlay(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
-	if len(args) < 2 {
-		session.ChannelMessageSend(msg.ChannelID, "No URL given")
-		return nil
-	}
 	voiceChannelID := getAuthorVoiceChannel(session, msg)
 	if voiceChannelID == "" {
 		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
@@ -58,68 +53,42 @@ func HandlePlay(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 		return nil
 	}
 
-	log.Printf("Creating subscription for user %s", msg.Author.Username)
-	sub := &Subscription{
-		voiceChannelID + "-" + msg.Author.ID,
-		[]*youtube.Video{},
-		make(chan string),
-		make(chan *youtube.Video, MaxQueueLen),
-		make(chan *Track, MaxQueueLen),
-	}
-	Subscriptions[voiceChannelID] = sub
-	defer delete(Subscriptions, voiceChannelID)
-	err := AddToQueue(session, msg, sub, args[1])
-	if err != nil {
-		return err
-	}
-	// Make folder for files
-	if err = os.Mkdir(sub.ID, 0755); err != nil && !errors.Is(err, os.ErrExist) {
-		return err
-	}
-	defer os.RemoveAll(sub.ID)
-
-	// File download manager
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go ManageFileQueue(ctx, sub)
-
-	// Join voice channel and start websocket audio communication
-	vc, err := session.ChannelVoiceJoin(msg.GuildID, voiceChannelID, false, true)
-	if err != nil {
-		return err
-	}
-	defer vc.Disconnect()
-	// Any error handling past here must close the voice channel connection
-	vc.Speaking(true)
-	log.Printf("Starting playing for user %s", msg.Author.Username)
-	err = PlayWebMFileQueue(session, msg, vc, sub)
-	if err != nil {
-		return err
-	}
-
-	vc.Speaking(false)
-	session.ChannelMessageSend(msg.ChannelID, "Stopping playing")
-	log.Printf("Removing subscription for user %s", msg.Author.Username)
-	return nil
-}
-
-func HandleQueue(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
 	if len(args) < 2 {
 		session.ChannelMessageSend(msg.ChannelID, "No URL given")
 		return nil
 	}
 	URL := args[1]
+
+	return RunPlayer(session, msg, voiceChannelID, URL)
+}
+
+/*
+	Add a video or playlist to the queue of an existing subscription
+*/
+func HandleQueue(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
 	voiceChannelID := getAuthorVoiceChannel(session, msg)
+	if voiceChannelID == "" {
+		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
+		return nil
+	}
+
+	if len(args) < 2 {
+		session.ChannelMessageSend(msg.ChannelID, "No URL given")
+		return nil
+	}
+	URL := args[1]
+
+	// Start playing music if none currently being played
 	if _, ok := Subscriptions[voiceChannelID]; !ok {
-		return HandlePlay(session, msg, args)
+		return RunPlayer(session, msg, voiceChannelID, URL)
 	}
 	sub := Subscriptions[voiceChannelID]
 
-	err := AddToQueue(session, msg, sub, URL)
+	err := sub.AddToQueue(session, msg.ChannelID, URL)
 	if err != nil {
 		return err
 	}
+	log.Println(sub)
 	return nil
 }
 
@@ -157,50 +126,53 @@ func HandleEvent(session *discordgo.Session, msg *discordgo.MessageCreate, args 
 	return nil
 }
 
-func downloadAudio(folder string, video *youtube.Video) (*Track, error) {
-	format, err := getFirstOpusFormat(&video.Formats)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Println("Downloading audio file")
-	client := youtube.Client{}
-	stream, _, err := client.GetStream(video, format)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create unique file name
-	num, err := rand.Int(rand.Reader, big.NewInt(10000))
-	if err != nil {
-		return nil, err
-	}
-	filename := fmt.Sprintf("%s/%s-%s.webm", folder, video.ID, num)
-	// Must save to file for webm decoder
-	file, err := os.Create(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	_, err = io.Copy(file, stream)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Track{filename, video.Title}, nil
-}
-
 /*
-	Find first opus format youtube audio
+	Run a music player for a voice channel, from start to finish
 */
-func getFirstOpusFormat(formats *youtube.FormatList) (*youtube.Format, error) {
-	var format youtube.Format
-	for _, format := range *formats {
-		if format.AudioChannels > 0 && strings.Contains(format.MimeType, "opus") {
-			return &format, nil
-		}
+func RunPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceChannelID string, URL string) error {
+	// Make subscription object
+	log.Printf("Creating subscription for user %s", msg.Author.Username)
+	sub, err := NewSubscription()
+	if err != nil {
+		return err
 	}
-	return &format, errors.New("no format could be found")
+	Subscriptions[voiceChannelID] = sub
+	defer delete(Subscriptions, voiceChannelID)
+
+	// Make folder for files
+	if err = os.Mkdir(sub.ID, 0755); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	defer os.RemoveAll(sub.ID)
+
+	err = sub.AddToQueue(session, msg.ChannelID, URL)
+	if err != nil {
+		return err
+	}
+	// File download manager
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go sub.ManageDownloads(ctx)
+
+	// Join voice channel and start websocket audio communication
+	vc, err := session.ChannelVoiceJoin(msg.GuildID, voiceChannelID, false, true)
+	if err != nil {
+		return err
+	}
+	defer vc.Disconnect()
+	// Any error handling past here must close the voice channel connection
+	vc.Speaking(true)
+	log.Printf("Starting playing for user %s", msg.Author.Username)
+	err = sub.ManagePlayback(session, msg.ChannelID, vc)
+	if err != nil {
+		return err
+	}
+
+	vc.Speaking(false)
+	session.ChannelMessageSend(msg.ChannelID, "Stopping playing")
+	log.Printf("Removing subscription for user %s", msg.Author.Username)
+	return nil
 }
 
 /*

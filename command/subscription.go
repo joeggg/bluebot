@@ -4,9 +4,14 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/rand"
+	"errors"
 	"fmt"
+	"io"
 	"log"
+	"math/big"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -21,11 +26,13 @@ var (
 )
 
 var Subscriptions = make(map[string]*Subscription)
+var usedIDs = make(map[string]bool)
 
 // Each instance of the bot playing in a voice channel is a "Subscription"
 type Subscription struct {
-	ID        string
+	ID        string              // Unique ID
 	Queue     []*youtube.Video    // All videos in queue, downloaded or not, needed for displaying queue
+	mu        *sync.Mutex         // To prevent race condition on queue append
 	Events    chan string         // Event queue
 	Downloads chan *youtube.Video // To download queue
 	Tracks    chan *Track         // Downloaded tracks queue
@@ -38,14 +45,23 @@ type Track struct {
 }
 
 func NewSubscription() (*Subscription, error) {
-	// Get a random hash as the ID
-	buffer := make([]byte, 8)
-	_, err := rand.Read(buffer)
-	if err != nil {
-		return nil, err
+	// Get a random hash as the ID (that isn't in use)
+	var id string
+	for {
+		buffer := make([]byte, 4)
+		_, err := rand.Read(buffer)
+		if err != nil {
+			return nil, err
+		}
+		id = fmt.Sprintf("%x", md5.Sum(buffer))
+		if _, ok := usedIDs[id]; !ok {
+			usedIDs[id] = true
+			break
+		}
 	}
 	sub := &Subscription{
-		ID:        fmt.Sprintf("%x", md5.Sum(buffer)),
+		ID:        id,
+		mu:        &sync.Mutex{},
 		Queue:     []*youtube.Video{},
 		Events:    make(chan string),
 		Downloads: make(chan *youtube.Video, MaxQueueLen),
@@ -55,58 +71,65 @@ func NewSubscription() (*Subscription, error) {
 }
 
 /*
-	Add a video or playlist to queue
+	Request metadata for a video or series of videos from a playlist and add to the
+	downloads channel
 */
-func AddToQueue(
-	session *discordgo.Session,
-	msg *discordgo.MessageCreate,
-	sub *Subscription,
-	url string,
-) error {
-
+func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, url string) error {
 	if MaxQueueLen-len(sub.Queue) < 1 {
-		session.ChannelMessageSend(msg.ChannelID, "Max queue length reached")
+		session.ChannelMessageSend(chID, "Max queue length reached")
 		return nil
 	}
 	client := youtube.Client{}
 	if playlist, err := client.GetPlaylist(url); err == nil {
 		condensedMsg := false
 		tracksAdded := 0
+		// Show single condensed message if too many tracks
 		if len(playlist.Videos) > MaxQueueDisplay {
 			condensedMsg = true
 		}
 		for _, item := range playlist.Videos {
 			if MaxQueueLen-len(sub.Queue) < 1 {
-				session.ChannelMessageSend(msg.ChannelID, "Max queue length reached")
+				session.ChannelMessageSend(chID, "Max queue length reached")
 				break
 			}
 			video, err := client.GetVideo(item.ID)
-			if err != nil {
+			if err != nil { // Skip broken videos
 				continue
 			}
 			// Add to queue list and download channel
+			sub.mu.Lock()
 			sub.Queue = append(sub.Queue, video)
+			sub.mu.Unlock()
 			sub.Downloads <- video
 			if !condensedMsg {
-				session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Adding track [ %s ] to the queue", video.Title))
+				session.ChannelMessageSend(chID, fmt.Sprintf("Added track [ %s ] to the queue", video.Title))
 			} else {
 				// Count tracks added for condensed message
 				tracksAdded++
 			}
 		}
-		session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Added %d tracks to the queue", tracksAdded))
+		session.ChannelMessageSend(chID, fmt.Sprintf("Added %d tracks to the queue", tracksAdded))
 		return nil
 	} else if video, err := client.GetVideo(url); err == nil {
+		sub.mu.Lock()
 		sub.Queue = append(sub.Queue, video)
+		sub.mu.Unlock()
 		sub.Downloads <- video
-		session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Adding track [ %s ] to the queue", video.Title))
+		session.ChannelMessageSend(chID, fmt.Sprintf("Added track [ %s ] to the queue", video.Title))
 		return nil
 	} else {
 		return err
 	}
 }
 
-func ManageFileQueue(ctx context.Context, sub *Subscription) {
+/*
+	Manages downloading and saving tracks using the metadata added to the downloads channel
+	by the info manager
+
+	Puts the Track object containing the filename on the tracks channel to be picked up by the
+	playback manager
+*/
+func (sub *Subscription) ManageDownloads(ctx context.Context) {
 	for {
 		// Only download 2 tracks in advance
 		for len(sub.Tracks) > 1 {
@@ -132,9 +155,18 @@ func ManageFileQueue(ctx context.Context, sub *Subscription) {
 	}
 }
 
-func PlayWebMFileQueue(session *discordgo.Session, msg *discordgo.MessageCreate, vc *discordgo.VoiceConnection, sub *Subscription) error {
+/*
+	Play over the dowloaded tracks from the track channel by parsing the WebM and directly sending
+	the opus packets, deleting each track's file after it's finished
+
+	Accepts control events through the events channel
+
+	Waits for a bit when the track channel is empty before closing in case download is slow.
+	There's a long timeout on the parsed WebM channel for a similar reason
+*/
+func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string, vc *discordgo.VoiceConnection) error {
 	for {
-		// Iterate over the queue
+		// Iterate over the Tracks channel
 		select {
 		case track := <-sub.Tracks:
 			file, err := os.Open(track.filename)
@@ -148,7 +180,8 @@ func PlayWebMFileQueue(session *discordgo.Session, msg *discordgo.MessageCreate,
 			if err != nil {
 				return err
 			}
-			session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Playing track [ %s ]", track.title))
+			session.ChannelMessageSend(chID, fmt.Sprintf("Playing track [ %s ]", track.title))
+			log.Printf("Playing track [ ] for user [")
 			// Read opus data from parsed webm and pass into sending channel
 			playing := true
 			for playing {
@@ -181,14 +214,20 @@ func PlayWebMFileQueue(session *discordgo.Session, msg *discordgo.MessageCreate,
 			// Cleanup file and queue list
 			file.Close()
 			os.Remove(track.filename)
+			sub.mu.Lock()
 			sub.Queue = sub.Queue[1:]
-		// Wait 5 seconds after queue is empty in case of delay/adding more tracks
+			sub.mu.Unlock()
+		// Wait 5 seconds after queue is empty
 		case <-time.After(5 * time.Second):
 			return nil
 		}
 	}
 }
 
+/*
+	Wait for an event through the channel to end the pause.
+	Returns true if we need to stop rather than just resume
+*/
 func WaitForResume(ch chan string) bool {
 	for {
 		select {
@@ -203,4 +242,53 @@ func WaitForResume(ch chan string) bool {
 			time.Sleep(time.Millisecond * 500)
 		}
 	}
+}
+
+/*
+	Download a youtube video's audio to a WebM file with opus audio and return a Track object
+*/
+func downloadAudio(folder string, video *youtube.Video) (*Track, error) {
+	format, err := getFirstOpusFormat(&video.Formats)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Println("Downloading audio file")
+	client := youtube.Client{}
+	stream, _, err := client.GetStream(video, format)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create unique file name
+	num, err := rand.Int(rand.Reader, big.NewInt(10000))
+	if err != nil {
+		return nil, err
+	}
+	filename := fmt.Sprintf("%s/%s-%s.webm", folder, video.ID, num)
+	// Must save to file for webm decoder
+	file, err := os.Create(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	_, err = io.Copy(file, stream)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Track{filename, video.Title}, nil
+}
+
+/*
+	Find first opus format youtube audio
+*/
+func getFirstOpusFormat(formats *youtube.FormatList) (*youtube.Format, error) {
+	var format youtube.Format
+	for _, format := range *formats {
+		if format.AudioChannels > 0 && strings.Contains(format.MimeType, "opus") {
+			return &format, nil
+		}
+	}
+	return &format, errors.New("no format could be found")
 }
