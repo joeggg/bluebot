@@ -19,12 +19,13 @@ import (
 )
 
 var (
-	FrameSize  int = 960
-	Channels   int = 1
-	SampleRate int = 48000
+	MaxQueueLen     int = 50
+	MaxQueueDisplay int = 3
+	MaxListDisplay  int = 10
 )
 
 type Subscription struct {
+	ID        string
 	queue     []*youtube.Video    // All videos in queue, downloaded or not, needed for displaying queue
 	events    chan string         // Event queue
 	downloads chan *youtube.Video // To download queue
@@ -48,6 +49,10 @@ var subCommands = map[string]util.HandlerFunc{
 }
 
 func HandleYT(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	if len(args) < 1 {
+		session.ChannelMessageSend(msg.ChannelID, "Invalid yt command")
+		return nil
+	}
 	if subCommand, ok := subCommands[args[0]]; !ok {
 		session.ChannelMessageSend(msg.ChannelID, "Unknown music command")
 		return nil
@@ -60,6 +65,10 @@ func HandleYT(session *discordgo.Session, msg *discordgo.MessageCreate, args []s
 	Download and play the audio of a video from YouTube
 */
 func HandlePlay(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	if len(args) < 2 {
+		session.ChannelMessageSend(msg.ChannelID, "No URL given")
+		return nil
+	}
 	voiceChannelID := GetAuthorVoiceChannel(session, msg)
 	if voiceChannelID == "" {
 		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
@@ -73,10 +82,11 @@ func HandlePlay(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 
 	log.Printf("Creating subscription for user %s", msg.Author.Username)
 	sub := &Subscription{
+		voiceChannelID + "-" + msg.Author.ID,
 		[]*youtube.Video{},
 		make(chan string),
-		make(chan *youtube.Video, 50),
-		make(chan *Track, 50),
+		make(chan *youtube.Video, MaxQueueLen),
+		make(chan *Track, MaxQueueLen),
 	}
 	subscriptions[voiceChannelID] = sub
 	defer delete(subscriptions, voiceChannelID)
@@ -84,6 +94,11 @@ func HandlePlay(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 	if err != nil {
 		return err
 	}
+	// Make folder for files
+	if err = os.Mkdir(sub.ID, 0755); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	defer os.RemoveAll(sub.ID)
 
 	// File download manager
 	ctx := context.Background()
@@ -112,6 +127,10 @@ func HandlePlay(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 }
 
 func HandleQueue(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	if len(args) < 2 {
+		session.ChannelMessageSend(msg.ChannelID, "No URL given")
+		return nil
+	}
 	voiceChannelID := GetAuthorVoiceChannel(session, msg)
 	if _, ok := subscriptions[voiceChannelID]; !ok {
 		return HandlePlay(session, msg, args)
@@ -132,9 +151,18 @@ func HandleList(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 		return nil
 	}
 
-	output := ""
-	for i, video := range subscriptions[voiceChannelID].queue {
-		output += fmt.Sprintf("%d - %s\n", i, video.Title)
+	sub := subscriptions[voiceChannelID]
+	output := "\\~~\\~~\\~~ Current queue \\~~\\~~\\~~\n"
+	numTracks := len(sub.queue)
+	max := MaxListDisplay
+	if numTracks < max {
+		max = numTracks
+	}
+	for i := 0; i < max; i++ {
+		output += fmt.Sprintf("%d - %s\n", i+1, sub.queue[i].Title)
+	}
+	if numTracks > max {
+		output += fmt.Sprintf("...and %d more tracks", numTracks-max)
 	}
 	session.ChannelMessageSend(msg.ChannelID, output)
 	return nil
@@ -154,11 +182,28 @@ func HandleEvent(session *discordgo.Session, msg *discordgo.MessageCreate, args 
 	Add a video or playlist to queue
 */
 func AddToQueue(
-	session *discordgo.Session, msg *discordgo.MessageCreate, sub *Subscription, url string,
+	session *discordgo.Session,
+	msg *discordgo.MessageCreate,
+	sub *Subscription,
+	url string,
 ) error {
+
+	if MaxQueueLen-len(sub.queue) < 1 {
+		session.ChannelMessageSend(msg.ChannelID, "Max queue length reached")
+		return nil
+	}
 	client := youtube.Client{}
 	if playlist, err := client.GetPlaylist(url); err == nil {
+		condensedMsg := false
+		tracksAdded := 0
+		if len(playlist.Videos) > MaxQueueDisplay {
+			condensedMsg = true
+		}
 		for _, item := range playlist.Videos {
+			if MaxQueueLen-len(sub.queue) < 1 {
+				session.ChannelMessageSend(msg.ChannelID, "Max queue length reached")
+				break
+			}
 			video, err := client.GetVideo(item.ID)
 			if err != nil {
 				continue
@@ -166,20 +211,26 @@ func AddToQueue(
 			// Add to queue list and download channel
 			sub.queue = append(sub.queue, video)
 			sub.downloads <- video
-			session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Adding track [ %s ] to queue", video.Title))
+			if !condensedMsg {
+				session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Adding track [ %s ] to the queue", video.Title))
+			} else {
+				// Count tracks added for condensed message
+				tracksAdded++
+			}
 		}
+		session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Added %d tracks to the queue", tracksAdded))
 		return nil
 	} else if video, err := client.GetVideo(url); err == nil {
 		sub.queue = append(sub.queue, video)
 		sub.downloads <- video
-		session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Adding track [ %s ] to queue", video.Title))
+		session.ChannelMessageSend(msg.ChannelID, fmt.Sprintf("Adding track [ %s ] to the queue", video.Title))
 		return nil
 	} else {
 		return err
 	}
 }
 
-func DownloadAudio(video *youtube.Video) (*Track, error) {
+func DownloadAudio(folder string, video *youtube.Video) (*Track, error) {
 	format, err := GetFirstOpusFormat(&video.Formats)
 	if err != nil {
 		return nil, err
@@ -197,7 +248,7 @@ func DownloadAudio(video *youtube.Video) (*Track, error) {
 	if err != nil {
 		return nil, err
 	}
-	filename := fmt.Sprintf("%s-%s.webm", video.ID, num)
+	filename := fmt.Sprintf("%s/%s-%s.webm", folder, video.ID, num)
 	// Must save to file for webm decoder
 	file, err := os.Create(filename)
 	if err != nil {
@@ -251,7 +302,7 @@ func ManageFileQueue(ctx context.Context, sub *Subscription) {
 		select {
 		// Get video metadata from queue and download the audio file
 		case video := <-sub.downloads:
-			track, err := DownloadAudio(video)
+			track, err := DownloadAudio(sub.ID, video)
 			if err != nil {
 				log.Printf("Failed to download file for %s", video.Title)
 				continue
