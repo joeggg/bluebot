@@ -31,7 +31,7 @@ func HandleTell(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 	}
 	defer file.Close()
 
-	voiceChannelID := GetAuthorVoiceChannel(session, msg)
+	voiceChannelID := getAuthorVoiceChannel(session, msg)
 	if voiceChannelID == "" {
 		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
 		return nil
