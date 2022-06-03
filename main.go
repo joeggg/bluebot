@@ -50,7 +50,7 @@ func MessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 // Main entry point: start discord-go client and wait for messages
 func main() {
 	log.Println("Hello")
-	token, err := config.ReadToken()
+	token, err := config.ReadDiscordToken()
 	if err != nil {
 		return
 	}
