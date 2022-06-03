@@ -40,8 +40,8 @@ type Subscription struct {
 
 // Represents a downloaded track
 type Track struct {
-	filename string
-	title    string
+	Filename string
+	Title    string
 }
 
 func NewSubscription() (*Subscription, error) {
@@ -74,10 +74,10 @@ func NewSubscription() (*Subscription, error) {
 	Request metadata for a video or series of videos from a playlist and add to the
 	downloads channel
 */
-func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, url string) error {
+func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, url string) {
 	if MaxQueueLen-len(sub.Queue) < 1 {
 		session.ChannelMessageSend(chID, "Max queue length reached")
-		return nil
+		return
 	}
 	client := youtube.Client{}
 	if playlist, err := client.GetPlaylist(url); err == nil {
@@ -109,16 +109,16 @@ func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, url
 			}
 		}
 		session.ChannelMessageSend(chID, fmt.Sprintf("Added %d tracks to the queue", tracksAdded))
-		return nil
+
 	} else if video, err := client.GetVideo(url); err == nil {
 		sub.mu.Lock()
 		sub.Queue = append(sub.Queue, video)
 		sub.mu.Unlock()
 		sub.Downloads <- video
 		session.ChannelMessageSend(chID, fmt.Sprintf("Added track [ %s ] to the queue", video.Title))
-		return nil
+
 	} else {
-		return err
+		session.ChannelMessageSend(chID, "Failed to find a download for the link given")
 	}
 }
 
@@ -169,7 +169,7 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 		// Iterate over the Tracks channel
 		select {
 		case track := <-sub.Tracks:
-			file, err := os.Open(track.filename)
+			file, err := os.Open(track.Filename)
 			if err != nil {
 				return err
 			}
@@ -180,8 +180,8 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 			if err != nil {
 				return err
 			}
-			session.ChannelMessageSend(chID, fmt.Sprintf("Playing track [ %s ]", track.title))
-			log.Printf("Playing track [ ] for user [")
+			session.ChannelMessageSend(chID, fmt.Sprintf("Playing track [ %s ]", track.Title))
+			log.Printf("Playing track [ %s ] for subscription %s", track.Title, sub.ID)
 			// Read opus data from parsed webm and pass into sending channel
 			playing := true
 			for playing {
@@ -213,7 +213,7 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 			}
 			// Cleanup file and queue list
 			file.Close()
-			os.Remove(track.filename)
+			os.Remove(track.Filename)
 			sub.mu.Lock()
 			sub.Queue = sub.Queue[1:]
 			sub.mu.Unlock()

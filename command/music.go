@@ -84,11 +84,7 @@ func HandleQueue(session *discordgo.Session, msg *discordgo.MessageCreate, args 
 	}
 	sub := Subscriptions[voiceChannelID]
 
-	err := sub.AddToQueue(session, msg.ChannelID, URL)
-	if err != nil {
-		return err
-	}
-	log.Println(sub)
+	sub.AddToQueue(session, msg.ChannelID, URL)
 	return nil
 }
 
@@ -131,13 +127,13 @@ func HandleEvent(session *discordgo.Session, msg *discordgo.MessageCreate, args 
 */
 func RunPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceChannelID string, URL string) error {
 	// Make subscription object
-	log.Printf("Creating subscription for user %s", msg.Author.Username)
 	sub, err := NewSubscription()
 	if err != nil {
 		return err
 	}
 	Subscriptions[voiceChannelID] = sub
 	defer delete(Subscriptions, voiceChannelID)
+	log.Printf("Created subscription %s for user %s", sub.ID, msg.Author.Username)
 
 	// Make folder for files
 	if err = os.Mkdir(sub.ID, 0755); err != nil && !errors.Is(err, os.ErrExist) {
@@ -145,7 +141,7 @@ func RunPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 	}
 	defer os.RemoveAll(sub.ID)
 
-	err = sub.AddToQueue(session, msg.ChannelID, URL)
+	go sub.AddToQueue(session, msg.ChannelID, URL)
 	if err != nil {
 		return err
 	}
