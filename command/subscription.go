@@ -217,8 +217,8 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 			sub.mu.Lock()
 			sub.Queue = sub.Queue[1:]
 			sub.mu.Unlock()
-		// Wait 5 seconds after queue is empty
-		case <-time.After(5 * time.Second):
+		// Wait 20 seconds after queue is empty
+		case <-time.After(20 * time.Second):
 			return nil
 		}
 	}

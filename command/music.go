@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -140,17 +141,17 @@ func RunPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 		return err
 	}
 	defer os.RemoveAll(sub.ID)
-
 	go sub.AddToQueue(session, msg.ChannelID, URL)
-	if err != nil {
-		return err
-	}
+
 	// File download manager
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go sub.ManageDownloads(ctx)
-
+	// Wait for 1 track at least downloaded
+	for len(sub.Tracks) == 0 {
+		time.Sleep(time.Millisecond)
+	}
 	// Join voice channel and start websocket audio communication
 	vc, err := session.ChannelVoiceJoin(msg.GuildID, voiceChannelID, false, true)
 	if err != nil {
