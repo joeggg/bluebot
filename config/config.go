@@ -7,7 +7,7 @@ import (
 
 // Read the token as a string from file
 func ReadToken() (string, error) {
-	token, err := ioutil.ReadFile("token/toe.txt")
+	token, err := ioutil.ReadFile("/etc/bluebot/token.txt")
 	if err != nil {
 		log.Println("Failed to open token file")
 		return "", err
