@@ -1,0 +1,12 @@
+[Unit]
+Description=Bluebot Discord bot
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/bluebot
+ExecStart=/opt/bluebot/bluebot
+User=bluebot
+Group=bluebot
+
+[Install]
+WantedBy=multi-user.target
