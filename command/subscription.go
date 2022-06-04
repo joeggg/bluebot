@@ -24,17 +24,18 @@ import (
 )
 
 var (
-	MaxQueueLen     int = 50
+	MaxQueueLen     int = 30
 	MaxQueueDisplay int = 3
 	MaxListDisplay  int = 10
 )
 
 var Subscriptions = make(map[string]*Subscription)
-var usedIDs = make(map[string]bool)
+var UsedIDs = make(map[string]bool)
 
 // Each instance of the bot playing in a voice channel is a "Subscription"
 type Subscription struct {
 	ID        string           // Unique ID
+	Folder    string           // Base folder + ID
 	Queue     []*ytdl.Video    // All videos in queue, downloaded or not, needed for displaying queue
 	mu        *sync.Mutex      // To prevent race condition on queue append
 	Events    chan string      // Event queue
@@ -58,13 +59,14 @@ func NewSubscription() (*Subscription, error) {
 			return nil, err
 		}
 		id = fmt.Sprintf("%x", md5.Sum(buffer))
-		if _, ok := usedIDs[id]; !ok {
-			usedIDs[id] = true
+		if _, ok := UsedIDs[id]; !ok {
+			UsedIDs[id] = true
 			break
 		}
 	}
 	sub := &Subscription{
 		ID:        id,
+		Folder:    config.AudioPath + "/" + id,
 		mu:        &sync.Mutex{},
 		Queue:     []*ytdl.Video{},
 		Events:    make(chan string),
@@ -186,12 +188,12 @@ func (sub *Subscription) ManageDownloads(ctx context.Context) {
 	for {
 		// Only download 2 tracks in advance
 		for len(sub.Tracks) > 1 {
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(time.Second)
 		}
 		select {
 		// Get video metadata from queue and download the audio file
 		case video := <-sub.Downloads:
-			track, err := downloadAudio(sub.ID, video)
+			track, err := downloadAudio(sub.Folder, video)
 			if err != nil {
 				log.Printf("Failed to download file for %s", video.Title)
 				continue

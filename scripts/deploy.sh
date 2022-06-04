@@ -1,3 +1,5 @@
+set -e
+
 # Assumes token already there and you can scp to /opt/bluebot
 TARGET="$1"
 INSTALL_DIR="/opt/bluebot"

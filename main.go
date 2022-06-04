@@ -4,6 +4,7 @@ import (
 	"bluebot/command"
 	"bluebot/config"
 	"bluebot/util"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -54,6 +55,14 @@ func main() {
 	if err != nil {
 		return
 	}
+	// Remove old stored audio from ungraceful shutdown
+	dirs, err := ioutil.ReadDir(config.AudioPath)
+	if err != nil {
+		return
+	}
+	for _, dir := range dirs {
+		os.RemoveAll(config.AudioPath + "/" + dir.Name())
+	}
 
 	discord, err := discordgo.New("Bot " + token)
 	if err != nil {
@@ -76,4 +85,9 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
 	discord.Close()
+	// Remove stored audio
+	err = os.RemoveAll(config.AudioPath + "/*")
+	if err != nil {
+		return
+	}
 }

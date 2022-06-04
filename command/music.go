@@ -132,13 +132,14 @@ func RunPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 	}
 	Subscriptions[voiceChannelID] = sub
 	defer delete(Subscriptions, voiceChannelID)
+	defer delete(UsedIDs, sub.ID)
 	log.Printf("Created subscription %s for user %s", sub.ID, msg.Author.Username)
 
 	// Make folder for files
-	if err = os.Mkdir(sub.ID, 0755); err != nil && !errors.Is(err, os.ErrExist) {
+	if err = os.Mkdir(sub.Folder, 0755); err != nil && !errors.Is(err, os.ErrExist) {
 		return err
 	}
-	defer os.RemoveAll(sub.ID)
+	defer os.RemoveAll(sub.Folder)
 	go sub.AddToQueue(session, msg.ChannelID, terms)
 
 	// File download manager
