@@ -121,30 +121,36 @@ func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, ter
 		if !strings.Contains(URL, "list=") {
 			sub.addVideo(session, chID, URL)
 		} else {
-			sub.addPlaylist(session, chID, URL)
+			sub.addPlaylist(session, chID, strings.Split(URL, "list=")[0])
 		}
 	}
 }
 
-func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, URL string) {
-	client := ytdl.Client{}
-	playlist, err := client.GetPlaylist(URL)
+func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, ID string) {
+	ctx := context.Background()
+	service, err := youtube.NewService(ctx, option.WithCredentialsFile(config.GoogleKeyPath))
 	if err != nil {
-		session.ChannelMessageSend(chID, "Failed to find a download for the link given")
+		session.ChannelMessageSend(chID, "Couldn't add to the queue")
+		log.Println(err)
+		return
+	}
+	parts := []string{"snippet"}
+	maxResults := MaxQueueLen - len(sub.Queue)
+	results, err := service.PlaylistItems.List(parts).PlaylistId(ID).MaxResults(int64(maxResults)).Do()
+	if err != nil {
+		session.ChannelMessageSend(chID, "Couldn't add to the queue")
+		log.Println(err)
 		return
 	}
 	condensedMsg := false
 	tracksAdded := 0
 	// Show single condensed message if too many tracks
-	if len(playlist.Videos) > MaxQueueDisplay {
+	if maxResults > MaxQueueDisplay {
 		condensedMsg = true
 	}
-	for _, item := range playlist.Videos {
-		if MaxQueueLen-len(sub.Queue) < 1 {
-			session.ChannelMessageSend(chID, "Max queue length reached")
-			break
-		}
-		video, err := client.GetVideo(item.ID)
+	client := ytdl.Client{}
+	for _, item := range results.Items {
+		video, err := client.GetVideo(item.Snippet.ResourceId.VideoId)
 		if err != nil { // Skip broken videos
 			continue
 		}

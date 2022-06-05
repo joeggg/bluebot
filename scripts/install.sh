@@ -7,6 +7,9 @@ if id "bluebot" &>/dev/null; then
     echo "User already exists"
 else
     echo "Creating bluebot user"
+    if [ ! -d /opt/bluebot ]; then
+        sudo mkdir /opt/bluebot
+    fi
     sudo useradd -m -d /opt/bluebot bluebot
 fi
 
