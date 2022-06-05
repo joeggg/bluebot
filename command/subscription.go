@@ -121,7 +121,7 @@ func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, ter
 		if !strings.Contains(URL, "list=") {
 			sub.addVideo(session, chID, URL)
 		} else {
-			sub.addPlaylist(session, chID, strings.Split(URL, "list=")[0])
+			sub.addPlaylist(session, chID, strings.Split(URL, "list=")[1])
 		}
 	}
 }

@@ -149,8 +149,12 @@ func RunPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 	go sub.ManageDownloads(ctx)
 	// Wait for 1 track at least downloaded
 	start := time.Now()
-	for len(sub.Tracks) == 0 && time.Since(start) < 60*time.Second {
+	for len(sub.Tracks) == 0 {
 		time.Sleep(500 * time.Millisecond)
+		if time.Since(start) < 60*time.Second {
+			// Nothing was added
+			return nil
+		}
 	}
 	// Join voice channel and start websocket audio communication
 	vc, err := session.ChannelVoiceJoin(msg.GuildID, voiceChannelID, false, true)
