@@ -1,15 +1,22 @@
 package command
 
 import (
+	"bluebot/config"
+	"encoding/csv"
+	"fmt"
+	"math/rand"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 var (
-	TierBounds [2]int
-	Players    [2]string
+	MaxTier int
+	MinTier int
+	Players []string
 )
 
 func HandleCiv(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
@@ -21,6 +28,35 @@ func HandleCiv(session *discordgo.Session, msg *discordgo.MessageCreate, args []
 }
 
 func generateCivs(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	file, err := os.Open(config.CivListPath)
+	if err != nil {
+		return err
+	}
+	reader := csv.NewReader(file)
+	civs, err := reader.ReadAll()
+	if err != nil {
+		return err
+	}
+	civs = civs[1:]
+
+	source := rand.NewSource(time.Now().UnixNano())
+	r1 := rand.New(source)
+	output := ""
+	for _, player := range args {
+		tier := -1
+		num := 0
+		for tier < MinTier || tier > MaxTier {
+			num = r1.Intn(len(civs))
+			tier, err = strconv.Atoi(civs[num][2])
+			if err != nil {
+				return err
+			}
+			civs = append(civs[:num], civs[num+1:]...)
+		}
+		output += player + ": " + civs[num][1] + ", Tier: " + civs[num][2] + "\n"
+	}
+
+	session.ChannelMessageSend(msg.ChannelID, output)
 	return nil
 }
 
@@ -41,10 +77,13 @@ func setTiers(session *discordgo.Session, msg *discordgo.MessageCreate, args []s
 		return nil
 	}
 
-	if tier1 < tier2 {
-		TierBounds[0], TierBounds[1] = tier1, tier2
+	if tier1 > tier2 {
+		MinTier, MaxTier = tier1, tier2
 	} else {
-		TierBounds[0], TierBounds[1] = tier2, tier1
+		MinTier, MaxTier = tier2, tier1
 	}
+	session.ChannelMessageSend(
+		msg.ChannelID, fmt.Sprintf("Min and max tiers set to %d and %d", MinTier, MaxTier),
+	)
 	return nil
 }
