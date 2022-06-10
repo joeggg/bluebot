@@ -202,6 +202,8 @@ func (sub *Subscription) ManageDownloads(ctx context.Context) {
 			track, err := downloadAudio(sub.Folder, video)
 			if err != nil {
 				log.Printf("Failed to download file for %s", video.Title)
+				log.Println(err)
+				sub.removeQueueItem(video)
 				continue
 			}
 			sub.Tracks <- track
@@ -212,6 +214,18 @@ func (sub *Subscription) ManageDownloads(ctx context.Context) {
 
 		default:
 			time.Sleep(500 * time.Millisecond)
+		}
+	}
+}
+
+func (sub *Subscription) removeQueueItem(video *ytdl.Video) {
+	// Remove element from queue
+	for i, item := range sub.Queue {
+		if item.ID == video.ID {
+			sub.mu.Lock()
+			sub.Queue = append(sub.Queue[:i], sub.Queue[i+1:]...)
+			sub.mu.Unlock()
+			break
 		}
 	}
 }
