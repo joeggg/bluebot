@@ -38,7 +38,7 @@ type Subscription struct {
 	Folder    string           // Base folder + ID
 	Queue     []*ytdl.Video    // All videos in queue, downloaded or not, needed for displaying queue
 	mu        *sync.Mutex      // To prevent race condition on queue append
-	Events    chan string      // Event queue
+	Events    chan string      // Event queue (user actions such as pause, next etc.)
 	Downloads chan *ytdl.Video // To download queue
 	Tracks    chan *Track      // Downloaded tracks queue
 }
@@ -77,115 +77,135 @@ func NewSubscription() (*Subscription, error) {
 }
 
 /*
-	Request metadata for a video or series of videos from a playlist and add to the
-	downloads channel
+	Add a video or playlist to the queue and downloads channel. Directly get the metadata and add
+	to queue if a URL otherwise first search youtube and use the first valid result
+
 */
 func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, terms []string) {
 	if MaxQueueLen-len(sub.Queue) < 1 {
 		session.ChannelMessageSend(chID, "Max queue length reached")
 		return
 	}
-	if !strings.Contains(terms[0], "https://") {
-		// Search youtube for an ID
-		ctx := context.Background()
-		service, err := youtube.NewService(ctx, option.WithCredentialsFile(config.GoogleKeyPath))
-		if err != nil {
-			session.ChannelMessageSend(chID, "Couldn't add to the queue")
-			log.Println(err)
-			return
-		}
-		parts := []string{"snippet"}
-		results, err := service.Search.List(parts).Q(strings.Join(terms, "")).MaxResults(5).Do()
-		if err != nil {
-			session.ChannelMessageSend(chID, "Couldn't add to the queue")
-			log.Println(err)
-			return
-		}
-		if len(results.Items) == 0 {
-			session.ChannelMessageSend(chID, "YouTube search returned no results")
-			return
-		}
 
-		firstItem := results.Items[0]
-		if videoID := firstItem.Id.VideoId; videoID != "" {
-			sub.addVideo(session, chID, videoID)
-		} else if playlistID := firstItem.Id.PlaylistId; playlistID != "" {
-			sub.addPlaylist(session, chID, playlistID)
-		} else {
-			session.ChannelMessageSend(chID, "Couldn't find anything on YouTube search")
+	var err error
+	if !strings.Contains(terms[0], "https://") {
+		// Not a URL so search youtube for a video/playlist
+		items, err := searchYT(strings.Join(terms, " "))
+		if err != nil {
+			session.ChannelMessageSend(chID, "YouTube search returned no results")
+			log.Println(err)
+			return
 		}
+		// Use first result with an ID that can be added
+		for i := range items {
+			if items[i].Id.VideoId != "" {
+				err = sub.addVideo(session, chID, items[i].Id.VideoId, true)
+
+			} else if items[i].Id.PlaylistId != "" {
+				err = sub.addPlaylist(session, chID, items[i].Id.PlaylistId)
+			}
+			if err == nil {
+				return
+			}
+		}
+		session.ChannelMessageSend(chID, "YouTube search returned no results")
+		log.Println(err)
+
 	} else {
-		fmt.Println("hi")
 		// Use the given URL
 		URL := terms[0]
 		if !strings.Contains(URL, "list=") {
-			sub.addVideo(session, chID, URL)
+			err = sub.addVideo(session, chID, URL, true)
 		} else {
-			sub.addPlaylist(session, chID, strings.Split(URL, "list=")[1])
+			err = sub.addPlaylist(session, chID, strings.Split(URL, "list=")[1])
+		}
+		if err != nil {
+			session.ChannelMessageSend(chID, "Failed to find a download for "+URL)
+			log.Println(err)
 		}
 	}
 }
 
-func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, ID string) {
+/*
+	Search youtube for a list of videos or playlists
+*/
+func searchYT(query string) ([]*youtube.SearchResult, error) {
 	ctx := context.Background()
 	service, err := youtube.NewService(ctx, option.WithCredentialsFile(config.GoogleKeyPath))
 	if err != nil {
-		session.ChannelMessageSend(chID, "Couldn't add to the queue")
-		log.Println(err)
-		return
+		return nil, err
 	}
 	parts := []string{"snippet"}
-	maxResults := MaxQueueLen - len(sub.Queue)
-	results, err := service.PlaylistItems.List(parts).PlaylistId(ID).MaxResults(int64(maxResults)).Do()
-	if err != nil {
-		session.ChannelMessageSend(chID, "Couldn't add to the queue")
-		log.Println(err)
-		return
+	results, err := service.Search.List(parts).Q(query).MaxResults(5).Do()
+	if err != nil || len(results.Items) == 0 {
+		return nil, err
 	}
-	condensedMsg := false
-	tracksAdded := 0
-	// Show single condensed message if too many tracks
-	if maxResults > MaxQueueDisplay {
-		condensedMsg = true
-	}
-	client := ytdl.Client{}
-	for _, item := range results.Items {
-		video, err := client.GetVideo(item.Snippet.ResourceId.VideoId)
-		if err != nil { // Skip broken videos
-			continue
-		}
-		// Add to queue list and download channel
-		sub.mu.Lock()
-		sub.Queue = append(sub.Queue, video)
-		sub.mu.Unlock()
-		sub.Downloads <- video
-		if !condensedMsg {
-			session.ChannelMessageSend(chID, fmt.Sprintf("Added track [ %s ] to the queue", video.Title))
-		} else {
-			// Count tracks added for condensed message
-			tracksAdded++
-		}
-	}
-	session.ChannelMessageSend(chID, fmt.Sprintf("Added %d tracks to the queue", tracksAdded))
+	return results.Items, nil
 }
 
-func (sub *Subscription) addVideo(session *discordgo.Session, chID string, URL string) {
+/*
+	Get the list of videos for a playlist and add them to the download queue
+*/
+func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, ID string) error {
+	ctx := context.Background()
+	service, err := youtube.NewService(ctx, option.WithCredentialsFile(config.GoogleKeyPath))
+	if err != nil {
+		return err
+	}
+	parts := []string{"snippet"}
+	maxResults := int64(MaxQueueLen - len(sub.Queue))
+	results, err := service.PlaylistItems.List(parts).PlaylistId(ID).MaxResults(maxResults).Do()
+	if err != nil {
+		return err
+	}
+	// Show single condensed message if too many tracks
+	isCondensedMsg := false
+	tracksAdded := 0
+	if maxResults > int64(MaxQueueDisplay) {
+		isCondensedMsg = true
+	}
+
+	message, _ := session.ChannelMessageSend(chID, "--> Adding playlist to the queue...")
+	for _, item := range results.Items {
+		videoID := item.Snippet.ResourceId.VideoId
+		err := sub.addVideo(session, chID, videoID, !isCondensedMsg)
+		// Count tracks added for condensed message
+		if err == nil {
+			tracksAdded++
+		}
+		session.ChannelMessageEdit(chID, message.ID, fmt.Sprintf("--> Added track [ %s ] to the queue", item.Snippet.Title))
+	}
+	if isCondensedMsg {
+		session.ChannelMessageSend(chID, fmt.Sprintf("--> Added %d tracks to the queue", tracksAdded))
+	}
+	return nil
+}
+
+/*
+	Get metadata including audio formats for a video from its URL and add to the
+	queue & downloads channel
+*/
+func (sub *Subscription) addVideo(
+	session *discordgo.Session, chID string, URL string, isShowingMessage bool,
+) error {
 	client := ytdl.Client{}
 	video, err := client.GetVideo(URL)
 	if err != nil {
-		session.ChannelMessageSend(chID, "Failed to find a download for the link given")
-		return
+		return err
 	}
 	sub.mu.Lock()
 	sub.Queue = append(sub.Queue, video)
 	sub.mu.Unlock()
 	sub.Downloads <- video
-	session.ChannelMessageSend(chID, fmt.Sprintf("Added track [ %s ] to the queue", video.Title))
+	if isShowingMessage {
+		session.ChannelMessageSend(chID, fmt.Sprintf("--> Added track [ %s ] to the queue", video.Title))
+	}
+	return nil
 }
 
 /*
 	Manages downloading and saving tracks using the metadata added to the downloads channel
-	by the info manager
+	by the queue manager
 
 	Puts the Track object containing the filename on the tracks channel to be picked up by the
 	playback manager
@@ -255,7 +275,7 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 			if err != nil {
 				return err
 			}
-			session.ChannelMessageSend(chID, fmt.Sprintf("Playing track [ %s ]", track.Title))
+			session.ChannelMessageSend(chID, fmt.Sprintf("--> Playing track [ %s ]", track.Title))
 			log.Printf("Playing track [ %s ] for subscription %s", track.Title, sub.ID)
 			// Read opus data from parsed webm and pass into sending channel
 			playing := true
