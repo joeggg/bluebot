@@ -158,26 +158,24 @@ func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, ID
 	if err != nil {
 		return err
 	}
-	// Show single condensed message if too many tracks
-	isCondensedMsg := false
-	tracksAdded := 0
-	if maxResults > int64(MaxQueueDisplay) {
-		isCondensedMsg = true
-	}
 
+	tracksAdded := 0
 	message, _ := session.ChannelMessageSend(chID, "--> Adding playlist to the queue...")
 	for _, item := range results.Items {
 		videoID := item.Snippet.ResourceId.VideoId
-		err := sub.addVideo(session, chID, videoID, !isCondensedMsg)
+		err := sub.addVideo(session, chID, videoID, false)
 		// Count tracks added for condensed message
 		if err == nil {
 			tracksAdded++
+			session.ChannelMessageEdit(
+				chID, message.ID, fmt.Sprintf("--> Added track [ %s ] to the queue", item.Snippet.Title),
+			)
 		}
-		session.ChannelMessageEdit(chID, message.ID, fmt.Sprintf("--> Added track [ %s ] to the queue", item.Snippet.Title))
+
 	}
-	if isCondensedMsg {
-		session.ChannelMessageSend(chID, fmt.Sprintf("--> Added %d tracks to the queue", tracksAdded))
-	}
+	session.ChannelMessageEdit(
+		chID, message.ID, fmt.Sprintf("--> Added %d tracks to the queue", tracksAdded),
+	)
 	return nil
 }
 
@@ -379,11 +377,10 @@ func downloadAudio(folder string, video *ytdl.Video) (*Track, error) {
 	Find first opus format youtube audio
 */
 func getFirstOpusFormat(formats *ytdl.FormatList) (*ytdl.Format, error) {
-	var format ytdl.Format
 	for _, format := range *formats {
 		if format.AudioChannels > 0 && strings.Contains(format.MimeType, "opus") {
 			return &format, nil
 		}
 	}
-	return &format, errors.New("no format could be found")
+	return nil, errors.New("no format could be found")
 }
