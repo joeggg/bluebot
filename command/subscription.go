@@ -173,9 +173,8 @@ func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, ID
 		}
 
 	}
-	session.ChannelMessageEdit(
-		chID, message.ID, fmt.Sprintf("--> Added %d tracks to the queue", tracksAdded),
-	)
+	session.ChannelMessageDelete(chID, message.ID)
+	session.ChannelMessageSend(chID, fmt.Sprintf("--> Added %d tracks to the queue", tracksAdded))
 	return nil
 }
 
