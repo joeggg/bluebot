@@ -9,6 +9,7 @@ var (
 	GoogleKeyPath    string = "/etc/bluebot/google_token.json"
 	AudioPath        string = "/var/lib/bluebot"
 	DiscordTokenPath string = "/etc/bluebot/token.txt"
+	CivListPath      string = "./data/civ_list.csv"
 )
 
 // Read the token as a string from file

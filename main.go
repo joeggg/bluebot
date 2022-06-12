@@ -17,6 +17,7 @@ import (
 
 // Mapping of commands to handler functions
 var commands = map[string]util.HandlerFunc{
+	"civ":  command.HandleCiv,
 	"tell": command.HandleTell,
 	"say":  command.HandleSay,
 	"yt":   command.HandleYT,

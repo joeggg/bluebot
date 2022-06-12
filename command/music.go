@@ -151,7 +151,7 @@ func RunPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 	start := time.Now()
 	for len(sub.Tracks) == 0 {
 		time.Sleep(500 * time.Millisecond)
-		if time.Since(start) < 60*time.Second {
+		if time.Since(start) > 60*time.Second {
 			// Nothing was added
 			return nil
 		}
