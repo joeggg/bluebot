@@ -18,6 +18,7 @@ var (
 	DefaultMaxTier int = 1 // NOTE: tiers are inverse to expected
 	DefaultMinTier int = 8
 	Settings       *ttlcache.Cache[string, *Setting]
+	TTL            = 5 * time.Minute
 )
 
 type Setting struct {
@@ -39,7 +40,7 @@ func HandleCiv(session *discordgo.Session, msg *discordgo.MessageCreate, args []
 
 func CreateSettingsCache() {
 	Settings = ttlcache.New(
-		ttlcache.WithTTL[string, *Setting](30 * time.Minute),
+		ttlcache.WithTTL[string, *Setting](TTL),
 	)
 	go Settings.Start()
 }
@@ -52,7 +53,7 @@ func generateCivs(session *discordgo.Session, msg *discordgo.MessageCreate, args
 	// Check if settings exists and create new if not
 	settings := Settings.Get(msg.ChannelID)
 	if settings == nil {
-		settings = Settings.Set(msg.ChannelID, &Setting{DefaultMaxTier, DefaultMinTier, args}, 30*time.Second)
+		settings = Settings.Set(msg.ChannelID, &Setting{DefaultMaxTier, DefaultMinTier, args}, TTL)
 	} else if len(args) != 0 {
 		settings.Value().Players = args
 	}
@@ -131,7 +132,7 @@ func setTiers(session *discordgo.Session, msg *discordgo.MessageCreate, args []s
 
 	settings := Settings.Get(msg.ChannelID)
 	if settings == nil {
-		settings = Settings.Set(msg.ChannelID, &Setting{DefaultMaxTier, DefaultMinTier, []string{}}, 30*time.Second)
+		settings = Settings.Set(msg.ChannelID, &Setting{DefaultMaxTier, DefaultMinTier, []string{}}, TTL)
 	}
 	if tier1 < tier2 {
 		settings.Value().MaxTier = tier1
