@@ -7,9 +7,9 @@ import (
 
 var (
 	GoogleKeyPath    string = "/etc/bluebot/google_token.json"
-	AudioPath        string = "/var/lib/bluebot"
+	AudioPath        string = "/var/lib/bluebot/tmp"
 	DiscordTokenPath string = "/etc/bluebot/token.txt"
-	CivListPath      string = "./data/civ_list.csv"
+	CivListPath      string = "/var/lib/bluebot/civ_list.csv"
 )
 
 // Read the token as a string from file
