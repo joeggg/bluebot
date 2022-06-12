@@ -66,28 +66,34 @@ func generateCivs(session *discordgo.Session, msg *discordgo.MessageCreate, args
 	if err != nil {
 		return err
 	}
+	// Reduce civ list to only contain selected civs
+	for i := 0; i < len(civs); i++ {
+		tier, _ := strconv.Atoi(civs[i][2])
+		if tier < settings.Value().MaxTier || tier > settings.Value().MinTier {
+			civs = append(civs[:i], civs[i+1:]...)
+			i--
+		}
+	}
+	if len(civs) < 3*len(settings.Value().Players) {
+		session.ChannelMessageSend(msg.ChannelID, "Not enough civs for the criteria given")
+		return nil
+	}
 
 	// Generate random civs
 	source := rand.NewSource(time.Now().UnixNano())
 	r1 := rand.New(source)
 	output := ""
 	for _, player := range settings.Value().Players {
-		tier := -1
-		civ := ""
-		for tier < settings.Value().MaxTier || tier > settings.Value().MinTier {
-			idx := r1.Intn(len(civs))
-			tier, err = strconv.Atoi(civs[idx][2])
-			if err != nil {
-				return err
-			}
-			civ = civs[idx][1]
-			civs = append(civs[:idx], civs[idx+1:]...)
-			if len(civs) == 0 {
-				session.ChannelMessageSend(msg.ChannelID, "Not enough civs for the criteria given")
-				return nil
-			}
+		output += player + ": "
+		selected := []string{}
+		for n := 0; n < 3; n++ {
+			i := r1.Intn(len(civs))
+			tier, _ := strconv.Atoi(civs[i][2])
+			civ := civs[i][1]
+			civs = append(civs[:i], civs[i+1:]...)
+			selected = append(selected, fmt.Sprintf("%s(%d)", civ, tier))
 		}
-		output += fmt.Sprintf("%s: %s(%d)\n", player, civ, tier)
+		output += strings.Join(selected, ", ") + "\n"
 	}
 
 	session.ChannelMessageSend(msg.ChannelID, output)
