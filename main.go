@@ -4,6 +4,7 @@ import (
 	"bluebot/command"
 	"bluebot/config"
 	"bluebot/util"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 
 // Mapping of commands to handler functions
 var commands = map[string]util.HandlerFunc{
+	"civ":  command.HandleCiv,
 	"tell": command.HandleTell,
 	"say":  command.HandleSay,
 	"yt":   command.HandleYT,
@@ -50,9 +52,17 @@ func MessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 // Main entry point: start discord-go client and wait for messages
 func main() {
 	log.Println("Hello")
-	token, err := config.ReadToken()
+	token, err := config.ReadDiscordToken()
 	if err != nil {
 		return
+	}
+	// Remove old stored audio from ungraceful shutdown
+	dirs, err := ioutil.ReadDir(config.AudioPath)
+	if err != nil {
+		return
+	}
+	for _, dir := range dirs {
+		os.RemoveAll(config.AudioPath + "/" + dir.Name())
 	}
 
 	discord, err := discordgo.New("Bot " + token)
@@ -76,4 +86,9 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
 	discord.Close()
+	// Remove stored audio
+	err = os.RemoveAll(config.AudioPath + "/*")
+	if err != nil {
+		return
+	}
 }

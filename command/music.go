@@ -58,9 +58,8 @@ func HandlePlay(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 		session.ChannelMessageSend(msg.ChannelID, "No URL given")
 		return nil
 	}
-	URL := args[1]
 
-	return RunPlayer(session, msg, voiceChannelID, URL)
+	return RunPlayer(session, msg, voiceChannelID, args[1:])
 }
 
 /*
@@ -77,15 +76,14 @@ func HandleQueue(session *discordgo.Session, msg *discordgo.MessageCreate, args 
 		session.ChannelMessageSend(msg.ChannelID, "No URL given")
 		return nil
 	}
-	URL := args[1]
 
 	// Start playing music if none currently being played
 	if _, ok := Subscriptions[voiceChannelID]; !ok {
-		return RunPlayer(session, msg, voiceChannelID, URL)
+		return RunPlayer(session, msg, voiceChannelID, args[1:])
 	}
 	sub := Subscriptions[voiceChannelID]
 
-	sub.AddToQueue(session, msg.ChannelID, URL)
+	sub.AddToQueue(session, msg.ChannelID, args[1:])
 	return nil
 }
 
@@ -126,7 +124,7 @@ func HandleEvent(session *discordgo.Session, msg *discordgo.MessageCreate, args 
 /*
 	Run a music player for a voice channel, from start to finish
 */
-func RunPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceChannelID string, URL string) error {
+func RunPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceChannelID string, terms []string) error {
 	// Make subscription object
 	sub, err := NewSubscription()
 	if err != nil {
@@ -134,14 +132,15 @@ func RunPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 	}
 	Subscriptions[voiceChannelID] = sub
 	defer delete(Subscriptions, voiceChannelID)
+	defer delete(UsedIDs, sub.ID)
 	log.Printf("Created subscription %s for user %s", sub.ID, msg.Author.Username)
 
 	// Make folder for files
-	if err = os.Mkdir(sub.ID, 0755); err != nil && !errors.Is(err, os.ErrExist) {
+	if err = os.Mkdir(sub.Folder, 0755); err != nil && !errors.Is(err, os.ErrExist) {
 		return err
 	}
-	defer os.RemoveAll(sub.ID)
-	go sub.AddToQueue(session, msg.ChannelID, URL)
+	defer os.RemoveAll(sub.Folder)
+	go sub.AddToQueue(session, msg.ChannelID, terms)
 
 	// File download manager
 	ctx := context.Background()
@@ -149,8 +148,13 @@ func RunPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 	defer cancel()
 	go sub.ManageDownloads(ctx)
 	// Wait for 1 track at least downloaded
+	start := time.Now()
 	for len(sub.Tracks) == 0 {
 		time.Sleep(500 * time.Millisecond)
+		if time.Since(start) > 60*time.Second {
+			// Nothing was added
+			return nil
+		}
 	}
 	// Join voice channel and start websocket audio communication
 	vc, err := session.ChannelVoiceJoin(msg.GuildID, voiceChannelID, false, true)
