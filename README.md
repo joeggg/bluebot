@@ -22,4 +22,4 @@ Just ensure you have a directory called `/opt/bluebot` that you have permission 
 
 Pass the ssh target in as the main argument: `./scripts/deploy.sh joe@myserver`
 
-You will need to add your own discord token to the file `/etc/bluebot/token.txt` after deploying (service start will fail, restart after adding token)
+You will need to add your own discord token to the file `/etc/bluebot/token.txt` and a Google YouTube API key file `/etc/bluebot/google_token.json` after deploying (service start will fail, restart after adding token)
