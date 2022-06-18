@@ -3,7 +3,7 @@ set -e
 # Assumes token already there and you can scp to /opt/bluebot
 TARGET="$1"
 INSTALL_DIR="/opt/bluebot"
-FILES="command/ config/ scripts/ util/ main.go go.mod go.sum"
+FILES="command/ config/ data/ scripts/ util/ main.go go.mod go.sum"
 
 scp -r $FILES $TARGET:$INSTALL_DIR
 # Todo: cross compile and deploy binary?

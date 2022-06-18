@@ -51,35 +51,41 @@ func MessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 
 // Main entry point: start discord-go client and wait for messages
 func main() {
-	log.Println("Hello")
+	err := config.LoadConfig()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = config.SetupLogging()
+	if err != nil {
+		log.Fatalf("Error setting up log file: %v", err)
+	}
+
 	token, err := config.ReadDiscordToken()
 	if err != nil {
-		return
+		log.Fatalf("Failed to open Discord token file: %s", err)
 	}
 	// Remove old stored audio from ungraceful shutdown
-	dirs, err := ioutil.ReadDir(config.AudioPath)
+	dirs, err := ioutil.ReadDir(config.Cfg.AudioPath)
 	if err != nil {
-		return
+		log.Fatalf("Failed to read audio path: %s", err)
 	}
 	for _, dir := range dirs {
-		os.RemoveAll(config.AudioPath + "/" + dir.Name())
+		os.RemoveAll(config.Cfg.AudioPath + "/" + dir.Name())
 	}
 
 	discord, err := discordgo.New("Bot " + token)
 	if err != nil {
-		log.Println("Failed to create discord client")
-		return
+		log.Fatalln("Failed to create discord client")
 	}
 
 	err = discord.Open()
 	if err != nil {
-		log.Println("Failed to open connection to Discord")
-		return
+		log.Fatalln("Failed to open connection to Discord")
 	}
 
 	discord.AddHandler(MessageHandler)
 
-	log.Println("We're connected boyaa")
+	log.Println("bluebot is ready to rumble")
 
 	// Wait for OS signal through channel before closing main loop
 	sc := make(chan os.Signal, 1)
@@ -87,8 +93,8 @@ func main() {
 	<-sc
 	discord.Close()
 	// Remove stored audio
-	err = os.RemoveAll(config.AudioPath + "/*")
+	err = os.RemoveAll(config.Cfg.AudioPath + "/*")
 	if err != nil {
-		return
+		log.Fatalln("Failed to remove temporary audio folder")
 	}
 }

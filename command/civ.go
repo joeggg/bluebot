@@ -18,7 +18,7 @@ var (
 	DefaultMaxTier int = 1 // NOTE: tiers are inverse to expected
 	DefaultMinTier int = 8
 	Settings       *ttlcache.Cache[string, *Setting]
-	TTL            = 5 * time.Minute
+	TTL            = time.Duration(config.Cfg.SettingsDurationS) * time.Second
 )
 
 type Setting struct {
@@ -104,7 +104,7 @@ func generateCivs(session *discordgo.Session, msg *discordgo.MessageCreate, args
 	Read civ list from CSV
 */
 func readCivList() ([][]string, error) {
-	file, err := os.Open(config.CivListPath)
+	file, err := os.Open(config.Cfg.CivListPath)
 	if err != nil {
 		return nil, err
 	}

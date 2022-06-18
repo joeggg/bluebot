@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=/opt/bluebot
-ExecStart=/opt/bluebot/bluebot
+ExecStart=bash /opt/bluebot/run.sh
 User=bluebot
 Group=bluebot
 

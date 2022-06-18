@@ -1,0 +1,6 @@
+LogFilePath: log/logfile.log
+AudioPath: data/tmp
+SettingsDurationS: 300
+CivListPath: data/civ_list.csv
+GoogleKeyPath: token/google_token.json
+DiscordTokenPath: token/token.txt

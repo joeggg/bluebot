@@ -1,5 +1,7 @@
 .vscode
 token/
 botsounds/
-data/
 tmp/
+log/
+run.sh
+bluebot

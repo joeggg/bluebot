@@ -1,42 +1,74 @@
 set -e
 
+NAME="bluebot"
 GO="/usr/local/go/bin/go"
 
-echo "** Adding any required users **"
-if id "bluebot" &>/dev/null; then
-    echo "User already exists"
+if [ "$1" == "test" ]; then
+    echo "Starting test install"
+    LOG_DIR="./log"
+    CFG_DIR="./token"
+    DATA_DIR="./data"
 else
-    echo "Creating bluebot user"
-    if [ ! -d /opt/bluebot ]; then
-        sudo mkdir /opt/bluebot
+    echo "Starting systemd install"
+    INSTALL_DIR="/opt/$NAME"
+    LOG_DIR="/var/log/$NAME"
+    CFG_DIR="/etc/$NAME"
+    DATA_DIR="/var/lib/$NAME"
+
+    echo "** Adding any required users **"
+    if id $NAME &>/dev/null; then
+        echo "User already exists"
+    else
+        echo "Creating $NAME user"
+        if [ ! -d $INSTALL_DIR ]; then
+            sudo mkdir $INSTALL_DIR
+        fi
+        sudo useradd -m -d $INSTALL_DIR $NAME
     fi
-    sudo useradd -m -d /opt/bluebot bluebot
+
+    sudo chown -R $NAME $INSTALL_DIR
 fi
 
-sudo chown -R bluebot /opt/bluebot
+echo "** Creating any required folders **"
 # Tokens
-if [ ! -d /etc/bluebot ]; then
-    sudo mkdir /etc/bluebot
-    sudo touch /etc/bluebot/token.txt
-    sudo touch /etc/bluebot/google_key.txt
+if [ ! -d $CFG_DIR ]; then
+    sudo mkdir $CFG_DIR
+    sudo touch $CFG_DIR/token.txt
+    sudo touch $CFG_DIR/google_key.txt
 fi
 # Log dir
-if [ ! -d /var/log/bluebot ]; then
-    sudo mkdir /var/log/bluebot 
+if [ ! -d $LOG_DIR ]; then
+    sudo mkdir $LOG_DIR
+fi
+# Data dir
+if [ ! -d $DATA_DIR ]; then
+    sudo mkdir $DATA_DIR
+    sudo mv data/civ_list.scv $DATA_DIR
 fi
 # Tracks dir
-if [ ! -d /var/lib/bluebot ]; then
-    sudo mkdir /var/lib/bluebot 
+if [ ! -d "$DATA_DIR/tmp" ]; then
+    sudo mkdir $DATA_DIR/tmp
 fi
-
-sudo chown -R bluebot /etc/bluebot /var/log/bluebot /var/lib/bluebot
 
 echo "** Building executable **"
 $GO build
 echo "Done building"
 
-echo "** Installing service** "
-sudo mv scripts/bluebot.service /etc/systemd/system
-sudo systemctl daemon-reload
-sudo systemctl restart bluebot.service
-echo "Successfully installed service"
+if [ "$1" != "test" ]; then
+    sudo chown -R $NAME $CFG_DIR $LOG_DIR $DATA_DIR
+    # Add run script
+    sudo rm run.sh 2> /dev/null
+    echo "CONFIG=\"$CFG_DIR/config.yml\" ./bluebot" > run.sh
+    sudo chmod +x run.sh
+
+    echo "** Installing service** "
+    sudo mv config/config.yml $CFG_DIR 
+    sudo mv scripts/bluebot.service /etc/systemd/system
+    sudo systemctl daemon-reload
+    sudo systemctl restart bluebot.service
+    echo "Successfully installed service"
+else
+    echo "CONFIG=\"config/test_config.yml\" ./bluebot" > run.sh
+    sudo chmod 777 log/
+    sudo chmod +x run.sh
+fi
