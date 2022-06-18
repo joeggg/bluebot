@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
@@ -9,6 +10,7 @@ import (
 )
 
 var Cfg = Config{}
+var Phrases = map[string][]string{}
 
 type Config struct {
 	AudioPath         string `yaml:"AudioPath"`
@@ -31,7 +33,37 @@ func LoadConfig() error {
 	if err != nil {
 		return err
 	}
+	err = loadPhrases()
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+func loadPhrases() error {
+	var err error
+	Phrases["say"], err = loadPhrase("say")
+	if err != nil {
+		return err
+	}
+	Phrases["wrongcommand"], err = loadPhrase("wrongcommand")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func loadPhrase(filename string) ([]string, error) {
+	var phrases map[string][]string
+	file, err := ioutil.ReadFile(Cfg.AudioPath + "/../phrases/" + filename + ".json")
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(file, &phrases)
+	if err != nil {
+		return nil, err
+	}
+	return phrases["data"], nil
 }
 
 // Read the token as a string from file

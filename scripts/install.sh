@@ -43,7 +43,6 @@ fi
 # Data dir
 if [ ! -d $DATA_DIR ]; then
     sudo mkdir $DATA_DIR
-    sudo mv data/civ_list.scv $DATA_DIR
 fi
 # Tracks dir
 if [ ! -d "$DATA_DIR/tmp" ]; then
@@ -55,15 +54,16 @@ $GO build
 echo "Done building"
 
 if [ "$1" != "test" ]; then
-    sudo chown -R $NAME $CFG_DIR $LOG_DIR $DATA_DIR
     # Add run script
     sudo rm run.sh 2> /dev/null
     echo "CONFIG=\"$CFG_DIR/config.yml\" ./bluebot" > run.sh
     sudo chmod +x run.sh
 
     echo "** Installing service** "
+    sudo cp -r data/. $DATA_DIR
     sudo mv config/config.yml $CFG_DIR 
     sudo mv scripts/bluebot.service /etc/systemd/system
+    sudo chown -R $NAME $CFG_DIR $LOG_DIR $DATA_DIR
     sudo systemctl daemon-reload
     sudo systemctl restart bluebot.service
     echo "Successfully installed service"
