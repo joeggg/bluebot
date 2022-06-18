@@ -51,7 +51,11 @@ func MessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 
 // Main entry point: start discord-go client and wait for messages
 func main() {
-	err := config.SetupLogging()
+	err := config.LoadConfig()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = config.SetupLogging()
 	if err != nil {
 		log.Fatalf("Error setting up log file: %v", err)
 	}
@@ -61,12 +65,12 @@ func main() {
 		log.Fatalf("Failed to open Discord token file: %s", err)
 	}
 	// Remove old stored audio from ungraceful shutdown
-	dirs, err := ioutil.ReadDir(config.AudioPath)
+	dirs, err := ioutil.ReadDir(config.Cfg.AudioPath)
 	if err != nil {
 		log.Fatalf("Failed to read audio path: %s", err)
 	}
 	for _, dir := range dirs {
-		os.RemoveAll(config.AudioPath + "/" + dir.Name())
+		os.RemoveAll(config.Cfg.AudioPath + "/" + dir.Name())
 	}
 
 	discord, err := discordgo.New("Bot " + token)
@@ -89,7 +93,7 @@ func main() {
 	<-sc
 	discord.Close()
 	// Remove stored audio
-	err = os.RemoveAll(config.AudioPath + "/*")
+	err = os.RemoveAll(config.Cfg.AudioPath + "/*")
 	if err != nil {
 		log.Fatalln("Failed to remove temporary audio folder")
 	}

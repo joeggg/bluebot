@@ -35,5 +35,6 @@ require (
 	google.golang.org/grpc v1.46.2 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/hraban/opus.v2 v2.0.0-20220302220929-eeacdbcb92d0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32 // indirect
 )

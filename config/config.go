@@ -4,19 +4,41 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+
+	"gopkg.in/yaml.v3"
 )
 
-var (
-	GoogleKeyPath    string = "/etc/bluebot/google_token.json"
-	AudioPath        string = "/var/lib/bluebot/tmp"
-	DiscordTokenPath string = "/etc/bluebot/token.txt"
-	CivListPath      string = "/var/lib/bluebot/civ_list.csv"
-	LogfilePath      string = "/var/log/bluebot/logfile.log"
-)
+var ConfigPath = "config/test_config.yml"
+
+var Cfg = Config{}
+
+type Config struct {
+	AudioPath         string `yaml:"AudioPath"`
+	LogFilePath       string `yaml:"LogFilePath"`
+	CivListPath       string `yaml:"CivListPath"`
+	GoogleKeyPath     string `yaml:"GoogleKeyPath"`
+	DiscordTokenPath  string `yaml:"DiscordTokenPath"`
+	SettingsDurationS int    `yaml:"SettingsDurationS"`
+}
+
+func LoadConfig() error {
+	file, err := os.OpenFile(ConfigPath, os.O_RDONLY, 0444)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	decoder := yaml.NewDecoder(file)
+	err = decoder.Decode(&Cfg)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // Read the token as a string from file
 func ReadDiscordToken() (string, error) {
-	token, err := ioutil.ReadFile(DiscordTokenPath)
+	token, err := ioutil.ReadFile(Cfg.DiscordTokenPath)
 	if err != nil {
 		return "", err
 	}
@@ -24,7 +46,7 @@ func ReadDiscordToken() (string, error) {
 }
 
 func SetupLogging() error {
-	file, err := os.OpenFile(LogfilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	file, err := os.OpenFile(Cfg.LogFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}

@@ -104,7 +104,7 @@ func generateCivs(session *discordgo.Session, msg *discordgo.MessageCreate, args
 	Read civ list from CSV
 */
 func readCivList() ([][]string, error) {
-	file, err := os.Open(config.CivListPath)
+	file, err := os.Open(config.Cfg.CivListPath)
 	if err != nil {
 		return nil, err
 	}

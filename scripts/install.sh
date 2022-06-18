@@ -3,8 +3,8 @@ set -e
 NAME="bluebot"
 GO="/usr/local/go/bin/go"
 
-if [ "$1" == "local" ]; then
-    echo "Starting local install"
+if [ "$1" == "test" ]; then
+    echo "Starting test install"
     LOG_DIR="./log"
     CFG_DIR="./token"
     DATA_DIR="./data"
@@ -54,7 +54,7 @@ echo "** Building executable **"
 $GO build
 echo "Done building"
 
-if [ "$1" != "local" ]; then
+if [ "$1" != "test" ]; then
     sudo chown -R $NAME $CFG_DIR $LOG_DIR $DATA_DIR
     echo "** Installing service** "
     sudo mv scripts/bluebot.service /etc/systemd/system

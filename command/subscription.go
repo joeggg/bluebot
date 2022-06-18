@@ -66,7 +66,7 @@ func NewSubscription() (*Subscription, error) {
 	}
 	sub := &Subscription{
 		ID:        id,
-		Folder:    config.AudioPath + "/" + id,
+		Folder:    config.Cfg.AudioPath + "/" + id,
 		mu:        &sync.Mutex{},
 		Queue:     []*ytdl.Video{},
 		Events:    make(chan string),
@@ -131,7 +131,7 @@ func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, ter
 */
 func searchYT(query string) ([]*youtube.SearchResult, error) {
 	ctx := context.Background()
-	service, err := youtube.NewService(ctx, option.WithCredentialsFile(config.GoogleKeyPath))
+	service, err := youtube.NewService(ctx, option.WithCredentialsFile(config.Cfg.GoogleKeyPath))
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func searchYT(query string) ([]*youtube.SearchResult, error) {
 */
 func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, ID string) error {
 	ctx := context.Background()
-	service, err := youtube.NewService(ctx, option.WithCredentialsFile(config.GoogleKeyPath))
+	service, err := youtube.NewService(ctx, option.WithCredentialsFile(config.Cfg.GoogleKeyPath))
 	if err != nil {
 		return err
 	}
