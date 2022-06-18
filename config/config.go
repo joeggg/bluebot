@@ -8,8 +8,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var ConfigPath = "config/test_config.yml"
-
 var Cfg = Config{}
 
 type Config struct {
@@ -22,7 +20,7 @@ type Config struct {
 }
 
 func LoadConfig() error {
-	file, err := os.OpenFile(ConfigPath, os.O_RDONLY, 0444)
+	file, err := os.OpenFile(os.Getenv("CONFIG"), os.O_RDONLY, 0444)
 	if err != nil {
 		return err
 	}

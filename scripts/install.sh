@@ -56,9 +56,19 @@ echo "Done building"
 
 if [ "$1" != "test" ]; then
     sudo chown -R $NAME $CFG_DIR $LOG_DIR $DATA_DIR
+    # Add run script
+    sudo rm run.sh 2> /dev/null
+    echo "CONFIG=\"$CFG_DIR/config.yml\" ./bluebot" > run.sh
+    sudo chmod +x run.sh
+
     echo "** Installing service** "
+    sudo mv config/config.yml $CFG_DIR 
     sudo mv scripts/bluebot.service /etc/systemd/system
     sudo systemctl daemon-reload
     sudo systemctl restart bluebot.service
     echo "Successfully installed service"
+else
+    echo "CONFIG=\"config/test_config.yml\" ./bluebot" > run.sh
+    sudo chmod 777 log/
+    sudo chmod +x run.sh
 fi

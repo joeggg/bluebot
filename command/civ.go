@@ -18,7 +18,7 @@ var (
 	DefaultMaxTier int = 1 // NOTE: tiers are inverse to expected
 	DefaultMinTier int = 8
 	Settings       *ttlcache.Cache[string, *Setting]
-	TTL            = 5 * time.Minute
+	TTL            = time.Duration(config.Cfg.SettingsDurationS) * time.Second
 )
 
 type Setting struct {
