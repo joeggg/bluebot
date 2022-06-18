@@ -27,6 +27,6 @@ Ensure you have a directory called `/opt/bluebot` on the target and you have per
 You will need to add your own discord token to the file `/etc/bluebot/token.txt` and a Google YouTube API key file `/etc/bluebot/google_token.json` after deploying (service start will fail, restart after adding token)
 
 ### Local test
-Run `scripts/install.sh test` in a shell in the repo folder. The necessary folders will be created and the executable built. Then just run `./bluebot` to start the bot. 
+Run `scripts/install.sh test` in a shell in the repo folder. The necessary folders will be created and the executable built. Then just run `./run.sh` to start the bot. 
 
 As with the systemd install, you must have the 2 required tokens at `./token/token.txt` and `./token/google_token.json`. 
