@@ -46,16 +46,22 @@ func CreateSettingsCache() {
 	go Settings.Start()
 }
 
+func NewDefaultSetting() *Setting {
+	return &Setting{DefaultMaxTier, DefaultMinTier, []string{}}
+}
+
 /*
 	Generate a random selection of civs for provided or previously saved players within saved
 	or default min/max tiers
 */
 func generateCivs(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
-	// Check if settings exists and create new if not
+	// Check if settings exist and create new if not
 	settings := Settings.Get(msg.ChannelID)
 	if settings == nil {
-		settings = Settings.Set(msg.ChannelID, &Setting{DefaultMaxTier, DefaultMinTier, args}, TTL)
-	} else if len(args) != 0 {
+		settings = Settings.Set(msg.ChannelID, NewDefaultSetting(), TTL)
+	}
+	// Don't overwrite preexisting settings
+	if len(args) != 0 {
 		settings.Value().Players = args
 	}
 	if len(settings.Value().Players) == 0 {
@@ -75,7 +81,7 @@ func generateCivs(session *discordgo.Session, msg *discordgo.MessageCreate, args
 			i--
 		}
 	}
-	if len(civs) < 3*len(settings.Value().Players) {
+	if len(civs) < config.Cfg.CivSelections*len(settings.Value().Players) {
 		session.ChannelMessageSend(msg.ChannelID, "Not enough civs for the criteria given")
 		return nil
 	}
@@ -85,15 +91,16 @@ func generateCivs(session *discordgo.Session, msg *discordgo.MessageCreate, args
 	for _, player := range settings.Value().Players {
 		// Add name in bold and enough spaces to match the longest player name
 		output += fmt.Sprintf("**%s**: ", player)
-		selected := make([]string, 0, 3)
-		for n := 0; n < 3; n++ {
+		selected := make([]string, 0, config.Cfg.CivSelections)
+		for n := 0; n < config.Cfg.CivSelections; n++ {
+			// New rand int
 			max := big.NewInt(int64(len(civs)))
 			r, _ := rand.Int(rand.Reader, max)
 			i := r.Int64()
-			tier, _ := strconv.Atoi(civs[i][2])
-			civ := civs[i][1]
+			// Get Civ from list
+			civ, tier := civs[i][1], civs[i][2]
 			civs = append(civs[:i], civs[i+1:]...)
-			selected = append(selected, fmt.Sprintf("***%s*** (%d)", civ, tier))
+			selected = append(selected, fmt.Sprintf("***%s*** (%s)", civ, tier))
 		}
 		output += strings.Join(selected, ", ") + "\n"
 	}
@@ -140,7 +147,7 @@ func setTiers(session *discordgo.Session, msg *discordgo.MessageCreate, args []s
 
 	settings := Settings.Get(msg.ChannelID)
 	if settings == nil {
-		settings = Settings.Set(msg.ChannelID, &Setting{DefaultMaxTier, DefaultMinTier, []string{}}, TTL)
+		settings = Settings.Set(msg.ChannelID, NewDefaultSetting(), TTL)
 	}
 	if tier1 < tier2 {
 		settings.Value().MaxTier = tier1

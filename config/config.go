@@ -18,6 +18,7 @@ type Config struct {
 	AudioPath         string `yaml:"AudioPath"`
 	LogFilePath       string `yaml:"LogFilePath"`
 	CivListPath       string `yaml:"CivListPath"`
+	CivSelections     int    `yaml:"CivSelections"`
 	GoogleKeyPath     string `yaml:"GoogleKeyPath"`
 	DiscordTokenPath  string `yaml:"DiscordTokenPath"`
 	SettingsDurationS int    `yaml:"SettingsDurationS"`
