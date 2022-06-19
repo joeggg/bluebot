@@ -1,8 +1,12 @@
 package command
 
-import "github.com/bwmarrin/discordgo"
+import (
+	"bluebot/config"
+
+	"github.com/bwmarrin/discordgo"
+)
 
 func HandleSay(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
-	session.ChannelMessageSend(msg.ChannelID, "Hello!")
+	session.ChannelMessageSend(msg.ChannelID, config.GetPhrase("say"))
 	return nil
 }

@@ -46,6 +46,8 @@ func MessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 			session.ChannelMessageSend(msg.ChannelID, "A fatal internal error occurred")
 			log.Printf("Command %s failed with error: %s", command, err)
 		}
+	} else {
+		session.ChannelMessageSend(msg.ChannelID, config.GetPhrase("wrongcommand"))
 	}
 }
 

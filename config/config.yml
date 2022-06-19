@@ -2,5 +2,6 @@ LogFilePath: /var/log/bluebot/logfile.log
 AudioPath: /var/lib/bluebot/tmp
 SettingsDurationS: 300
 CivListPath: /var/lib/bluebot/civ_list.csv
+CivSelections: 3
 GoogleKeyPath: /etc/bluebot/google_token.json
 DiscordTokenPath: /etc/bluebot/token.txt
