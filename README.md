@@ -20,7 +20,7 @@ Plays music from YoutTube links or search terms, with different commands startin
 
 ### **%civ**
 
-Gives a selection of random Civilizations 5 civs to play for a given set of players. Can restrict to give only certain tiers of civ. Intended as a nicer way of more randomly choosing what to play as without having to random in-game. Number of civs given is set in config (default is 3)
+Gives a selection of random Civilizations 5 civs to play for a given set of players. Can restrict to give only certain tiers of civ. Intended as a nicer way of more randomly choosing what to play without having to random in-game. Number of civs given is set in config (default is 3)
 
 - `%civ <player1> <player2> ...` Generate a selection of civs for the given player names
 - `%civ` Regenerate the set of civs based on the last players given in this text channel. Settings persist for 5 minutes - can be set in config
@@ -58,8 +58,8 @@ The current lists in use are:
 
 If no phrases are provided for one of the given situations, the bot will just response with `Hello!`.
 
-The format for the lists JSON files is:
-```json
+The format for the JSON files is:
+```
 {
     "data": [
         "phrase 1...",
