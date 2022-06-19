@@ -2,9 +2,10 @@ package command
 
 import (
 	"bluebot/config"
+	"crypto/rand"
 	"encoding/csv"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"os"
 	"strconv"
 	"strings"
@@ -80,18 +81,19 @@ func generateCivs(session *discordgo.Session, msg *discordgo.MessageCreate, args
 	}
 
 	// Generate random civs
-	source := rand.NewSource(time.Now().UnixNano())
-	r1 := rand.New(source)
 	output := ""
 	for _, player := range settings.Value().Players {
-		output += player + ": "
-		selected := []string{}
+		// Add name in bold and enough spaces to match the longest player name
+		output += fmt.Sprintf("**%s**: ", player)
+		selected := make([]string, 0, 3)
 		for n := 0; n < 3; n++ {
-			i := r1.Intn(len(civs))
+			max := big.NewInt(int64(len(civs)))
+			r, _ := rand.Int(rand.Reader, max)
+			i := r.Int64()
 			tier, _ := strconv.Atoi(civs[i][2])
 			civ := civs[i][1]
 			civs = append(civs[:i], civs[i+1:]...)
-			selected = append(selected, fmt.Sprintf("%s(%d)", civ, tier))
+			selected = append(selected, fmt.Sprintf("***%s*** (%d)", civ, tier))
 		}
 		output += strings.Join(selected, ", ") + "\n"
 	}

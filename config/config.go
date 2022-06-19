@@ -1,9 +1,11 @@
 package config
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"io/ioutil"
 	"log"
+	"math/big"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -42,18 +44,18 @@ func LoadConfig() error {
 
 func loadPhrases() error {
 	var err error
-	Phrases["say"], err = loadPhrase("say")
+	Phrases["say"], err = loadPhraseList("say")
 	if err != nil {
 		return err
 	}
-	Phrases["wrongcommand"], err = loadPhrase("wrongcommand")
+	Phrases["wrongcommand"], err = loadPhraseList("wrongcommand")
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func loadPhrase(filename string) ([]string, error) {
+func loadPhraseList(filename string) ([]string, error) {
 	var phrases map[string][]string
 	file, err := ioutil.ReadFile(Cfg.AudioPath + "/../phrases/" + filename + ".json")
 	if err != nil {
@@ -64,6 +66,17 @@ func loadPhrase(filename string) ([]string, error) {
 		return nil, err
 	}
 	return phrases["data"], nil
+}
+
+// Get a random phrase from a chosen phrase list category
+func GetPhrase(category string) string {
+	list, ok := Phrases[category]
+	if !ok {
+		return "Hello!"
+	}
+	max := big.NewInt(int64(len(list)))
+	sel, _ := rand.Int(rand.Reader, max)
+	return list[sel.Int64()]
 }
 
 // Read the token as a string from file
