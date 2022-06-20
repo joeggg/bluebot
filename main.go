@@ -17,10 +17,11 @@ import (
 
 // Mapping of commands to handler functions
 var commands = map[string]util.HandlerFunc{
-	"civ":  command.HandleCiv,
-	"tell": command.HandleTell,
-	"say":  command.HandleSay,
-	"yt":   command.HandleYT,
+	"civ":      command.HandleCiv,
+	"tell":     command.HandleTell,
+	"say":      command.HandleSay,
+	"setvoice": command.HandleSetVoice,
+	"yt":       command.HandleYT,
 }
 
 func MessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
