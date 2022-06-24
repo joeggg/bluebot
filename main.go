@@ -24,6 +24,17 @@ var commands = map[string]util.HandlerFunc{
 	"yt":       command.HandleYT,
 }
 
+func AddImageCommands() {
+	for cmd, item := range config.ImageSettings {
+		settings := item
+		commands[cmd] = func(
+			session *discordgo.Session, msg *discordgo.MessageCreate, args []string,
+		) error {
+			return command.HandleImage(session, msg, settings, args)
+		}
+	}
+}
+
 func MessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 	if msg.Author.ID == session.State.User.ID {
 		return
@@ -52,8 +63,7 @@ func MessageHandler(session *discordgo.Session, msg *discordgo.MessageCreate) {
 	}
 }
 
-// Main entry point: start discord-go client and wait for messages
-func main() {
+func Setup() {
 	err := config.LoadConfig()
 	if err != nil {
 		log.Fatalln(err)
@@ -61,11 +71,6 @@ func main() {
 	err = config.SetupLogging()
 	if err != nil {
 		log.Fatalf("Error setting up log file: %v", err)
-	}
-
-	token, err := config.ReadDiscordToken()
-	if err != nil {
-		log.Fatalf("Failed to open Discord token file: %s", err)
 	}
 	// Remove old stored audio from ungraceful shutdown
 	dirs, err := ioutil.ReadDir(config.Cfg.AudioPath)
@@ -75,8 +80,14 @@ func main() {
 	for _, dir := range dirs {
 		os.RemoveAll(config.Cfg.AudioPath + "/" + dir.Name())
 	}
+}
 
-	discord, err := discordgo.New("Bot " + token)
+// Main entry point: start discord-go client and wait for messages
+func main() {
+	Setup()
+	AddImageCommands()
+
+	discord, err := discordgo.New("Bot " + config.DiscordToken)
 	if err != nil {
 		log.Fatalln("Failed to create discord client")
 	}

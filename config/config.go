@@ -12,11 +12,18 @@ import (
 )
 
 var Cfg = Config{}
+
+var DiscordToken string
+
 var Phrases = make(map[string][]string, 0)
+
 var VoicePresets = make(map[string]*VoicePreset, 0)
+
+var ImageSettings = make(map[string]*ImageSetting, 0)
 
 type Config struct {
 	AudioPath         string `yaml:"AudioPath"`
+	DataPath          string `yaml:"DataPath"`
 	LogFilePath       string `yaml:"LogFilePath"`
 	CivListPath       string `yaml:"CivListPath"`
 	CivSelections     int    `yaml:"CivSelections"`
@@ -24,6 +31,15 @@ type Config struct {
 	DiscordTokenPath  string `yaml:"DiscordTokenPath"`
 	SettingsDurationS int    `yaml:"SettingsDurationS"`
 	VoicePresetsPath  string `yaml:"VoicePresetsPath"`
+	ImagePath         string `yaml:"ImagePath"`
+	ImageSettingsPath string `yaml:"ImageSettingsPath"`
+	ImageFontPath     string `yaml:"ImageFontPath"`
+}
+
+type ImageSetting struct {
+	Filename string `json:"filename"`
+	TextX    int    `json:"text_x"`
+	TextY    int    `json:"text_y"`
 }
 
 type VoicePreset struct {
@@ -47,7 +63,15 @@ func LoadConfig() error {
 		return err
 	}
 
+	DiscordToken, err = ReadDiscordToken()
+	if err != nil {
+		return err
+	}
 	err = loadVoicePresets()
+	if err != nil {
+		return err
+	}
+	err = loadImageSettings()
 	if err != nil {
 		return err
 	}
@@ -65,6 +89,18 @@ func loadVoicePresets() error {
 		return err
 	}
 	err = json.Unmarshal(data, &VoicePresets)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func loadImageSettings() error {
+	data, err := ioutil.ReadFile(Cfg.ImageSettingsPath)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, &ImageSettings)
 	if err != nil {
 		return err
 	}

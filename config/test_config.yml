@@ -1,4 +1,5 @@
 LogFilePath: log/logfile.log
+DataPath: data
 AudioPath: data/tmp
 SettingsDurationS: 300
 CivListPath: data/civ_list.csv
@@ -6,3 +7,6 @@ CivSelections: 3
 GoogleKeyPath: token/google_token.json
 DiscordTokenPath: token/token.txt
 VoicePresetsPath: data/voice_presets.json 
+ImagePath: data/images
+ImageSettingsPath: data/images.json 
+ImageFontPath: /mnt/c/Windows/Fonts/Arial.ttf
