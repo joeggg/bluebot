@@ -81,7 +81,7 @@ The format for the JSON files is:
 
 ## Voice presets
 
-Place a JSON file at `data/voice_presets.json` before installing to load your own presets. At least a default voice is required for the `%tell` command to work. The keys for the preset correspond to the settings seen on the Google page for Text-to-Speech linked above.
+Place a JSON file at `data/voice_presets.json` before installing to load your own presets. At least a default voice is required for the `%tell` command to work. The keys for the preset correspond to the settings seen on the Google Text-to-Speech page linked above.
 
 The format for the JSON file is:
 ```
