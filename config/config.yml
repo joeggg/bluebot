@@ -1,12 +1,11 @@
-LogFilePath: /var/log/bluebot/logfile.log
-DataPath: /var/lib/bluebot
 AudioPath: /var/lib/bluebot/tmp
-SettingsDurationS: 300
 CivListPath: /var/lib/bluebot/civ_list.csv
 CivSelections: 3
 GoogleKeyPath: /etc/bluebot/google_token.json
 DiscordTokenPath: /etc/bluebot/token.txt
-VoicePresetsPath: /var/lib/bluebot/voice_presets.json 
+ImageFontPath: /usr/share/fonts/truetype/freefont/FreeSans.ttf
 ImagePath: /var/lib/bluebot/images 
 ImageSettingsPath: /var/lib/bluebot/images.json
-ImageFontPath: /usr/share/fonts/truetype/freefont/FreeSans.ttf
+LogFilePath: /var/log/bluebot/logfile.log
+SettingsDurationS: 300
+VoicePresetsPath: /var/lib/bluebot/voice_presets.json 

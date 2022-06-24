@@ -23,17 +23,16 @@ var ImageSettings = make(map[string]*ImageSetting, 0)
 
 type Config struct {
 	AudioPath         string `yaml:"AudioPath"`
-	DataPath          string `yaml:"DataPath"`
-	LogFilePath       string `yaml:"LogFilePath"`
 	CivListPath       string `yaml:"CivListPath"`
 	CivSelections     int    `yaml:"CivSelections"`
 	GoogleKeyPath     string `yaml:"GoogleKeyPath"`
 	DiscordTokenPath  string `yaml:"DiscordTokenPath"`
-	SettingsDurationS int    `yaml:"SettingsDurationS"`
-	VoicePresetsPath  string `yaml:"VoicePresetsPath"`
+	ImageFontPath     string `yaml:"ImageFontPath"`
 	ImagePath         string `yaml:"ImagePath"`
 	ImageSettingsPath string `yaml:"ImageSettingsPath"`
-	ImageFontPath     string `yaml:"ImageFontPath"`
+	LogFilePath       string `yaml:"LogFilePath"`
+	SettingsDurationS int    `yaml:"SettingsDurationS"`
+	VoicePresetsPath  string `yaml:"VoicePresetsPath"`
 }
 
 type ImageSetting struct {
@@ -58,29 +57,20 @@ func LoadConfig() error {
 	defer file.Close()
 
 	decoder := yaml.NewDecoder(file)
-	err = decoder.Decode(&Cfg)
-	if err != nil {
-		return err
-	}
 
-	DiscordToken, err = ReadDiscordToken()
-	if err != nil {
+	if err = decoder.Decode(&Cfg); err != nil {
 		return err
-	}
-	err = loadVoicePresets()
-	if err != nil {
+	} else if DiscordToken, err = ReadDiscordToken(); err != nil {
 		return err
-	}
-	err = loadImageSettings()
-	if err != nil {
+	} else if err = loadVoicePresets(); err != nil {
 		return err
-	}
-	err = loadPhrases()
-	if err != nil {
+	} else if err = loadImageSettings(); err != nil {
 		return err
+	} else if err = loadPhrases(); err != nil {
+		return err
+	} else {
+		return nil
 	}
-
-	return nil
 }
 
 func loadVoicePresets() error {

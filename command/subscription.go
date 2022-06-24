@@ -2,6 +2,7 @@ package command
 
 import (
 	"bluebot/config"
+	"bluebot/util"
 	"context"
 	"crypto/md5"
 	"crypto/rand"
@@ -9,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/big"
 	"os"
 	"strings"
 	"sync"
@@ -353,11 +353,11 @@ func downloadAudio(folder string, video *ytdl.Video) (*Track, error) {
 	}
 
 	// Create unique file name
-	num, err := rand.Int(rand.Reader, big.NewInt(10000))
+	randHex, err := util.RandomHex(4)
 	if err != nil {
 		return nil, err
 	}
-	filename := fmt.Sprintf("%s/%s-%s.webm", folder, video.ID, num)
+	filename := fmt.Sprintf("%s/%s-%s.webm", folder, video.ID, randHex)
 	// Must save to file for webm decoder
 	file, err := os.Create(filename)
 	if err != nil {

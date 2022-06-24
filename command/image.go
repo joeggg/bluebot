@@ -2,6 +2,7 @@ package command
 
 import (
 	"bluebot/config"
+	"bluebot/util"
 	"log"
 	"os"
 	"strings"
@@ -42,12 +43,23 @@ func HandleImage(
 	dc.DrawStringAnchored(
 		strings.Join(args, " "), float64(setting.TextX), float64(setting.TextY), 0.5, 0.5,
 	)
-	dc.SavePNG(config.Cfg.DataPath + "/out.png")
-
-	r, err := os.Open(config.Cfg.DataPath + "/out.png")
+	randHex, err := util.RandomHex(8)
 	if err != nil {
 		return err
 	}
+	outFilename := config.Cfg.ImagePath + "/" + randHex + ".png"
+	err = dc.SavePNG(outFilename)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(outFilename)
+
+	r, err := os.Open(outFilename)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
 	session.ChannelFileSend(msg.ChannelID, "pic.png", r)
 	return nil
 }
