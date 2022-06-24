@@ -8,8 +8,9 @@ All commands start with the `%` symbol followed by a keyword: `%<command>`.
 
 ### **%yt**
 
-Plays music from YoutTube links or search terms, with different commands starting with `%yt` followed by a second keyword:
+Joins the voice channel you are in and plays audio from YoutTube links or search terms, with different commands starting with `%yt` followed by a second keyword:
 
+Usage:
 - `%yt play <URL or search term>` Add a video or playlist to the queue and start playing
 - `%yt queue <URL or search term>` Add to the queue once already playing
 - `%yt next` Skip forward to the next track
@@ -22,15 +23,24 @@ Plays music from YoutTube links or search terms, with different commands startin
 
 Gives a selection of random Civilizations 5 civs to play for a given set of players. Can restrict to give only certain tiers of civ. Intended as a nicer way of more randomly choosing what to play without having to random in-game. Number of civs given is set in config (default is 3)
 
+Usage:
 - `%civ <player1> <player2> ...` Generate a selection of civs for the given player names
 - `%civ` Regenerate the set of civs based on the last players given in this text channel. Settings persist for 5 minutes - can be set in config
 - `%civ tiers <min/max>-<min/max>` Set the min/max tiers to those given (order doesn't matter). The full range of tiers is 1-8. 
 
 ### **%say**
 
-Says a random phrase from a list provided in the folder `data/phrases/say.json`. See the `Phrases` section below for details of custom phrases.
+Sends a random phrase as a message from a list provided in the folder `data/phrases/say.json`. See the `Phrases` section below for details of custom phrases.
 
-- `%say` The bot will message the text chat with a random phrase
+Usage:
+- `%say`
+
+### **%tell**
+Joins the voice channel you are in and will say a message you provide with the Google Text-to-Speech API (https://cloud.google.com/text-to-speech). Uses a default preset but others can be added and selected. See the `Voice presets` section for details on adding your own presets.
+
+Usage:
+- `%tell <message>`
+- `setvoice <preset>`
 
 
 ## Installation
@@ -50,7 +60,7 @@ As with the systemd install, you must have the 2 required tokens at `./token/tok
 
 ## Phrases
 
-In certain instances, the bot will message the text channel with a random phrase from lists of phrases you have to provide. These list should go in `data/phrases` and will be copied to the correct location when installed (or left there if test install).
+In certain instances, the bot will message the text channel with a random phrase from lists of phrases you have to provide. These lists should go in `data/phrases/<name>.json` and will be copied to the correct location when installed (or left there if test install).
 
 The current lists in use are:
 - `say.json` for responses to the `%say` command
@@ -66,5 +76,24 @@ The format for the JSON files is:
         "phrase 2...",
         ...
     ]
+}
+```
+
+## Voice presets
+
+Place a JSON file at `data/voice_presets.json` before installing to load your own presets. At least a default voice is required for the `%tell` command to work. The keys for the preset correspond to the settings seen on the Google Text-to-Speech page linked above.
+
+The format for the JSON file is:
+```
+{
+    "default": {
+        "language": "en-AU",
+        "name": "en-AU-Wavenet-A",
+        "pitch": 1,
+        "rate": 1,
+        "gender": "MALE"
+    },
+    <voice name>: {
+        ...
 }
 ```

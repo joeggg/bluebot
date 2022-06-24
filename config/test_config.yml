@@ -5,3 +5,4 @@ CivListPath: data/civ_list.csv
 CivSelections: 3
 GoogleKeyPath: token/google_token.json
 DiscordTokenPath: token/token.txt
+VoicePresetsPath: data/voice_presets.json 

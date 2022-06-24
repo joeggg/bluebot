@@ -12,7 +12,8 @@ import (
 )
 
 var Cfg = Config{}
-var Phrases = map[string][]string{}
+var Phrases = make(map[string][]string, 0)
+var VoicePresets = make(map[string]*VoicePreset, 0)
 
 type Config struct {
 	AudioPath         string `yaml:"AudioPath"`
@@ -22,6 +23,15 @@ type Config struct {
 	GoogleKeyPath     string `yaml:"GoogleKeyPath"`
 	DiscordTokenPath  string `yaml:"DiscordTokenPath"`
 	SettingsDurationS int    `yaml:"SettingsDurationS"`
+	VoicePresetsPath  string `yaml:"VoicePresetsPath"`
+}
+
+type VoicePreset struct {
+	Name     string  `json:"name"`
+	Language string  `json:"language"`
+	Pitch    float64 `json:"pitch"`
+	Rate     float64 `json:"rate"`
+	Gender   string  `json:"gender"`
 }
 
 func LoadConfig() error {
@@ -36,7 +46,25 @@ func LoadConfig() error {
 	if err != nil {
 		return err
 	}
+
+	err = loadVoicePresets()
+	if err != nil {
+		return err
+	}
 	err = loadPhrases()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func loadVoicePresets() error {
+	data, err := ioutil.ReadFile(Cfg.VoicePresetsPath)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, &VoicePresets)
 	if err != nil {
 		return err
 	}

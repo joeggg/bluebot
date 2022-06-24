@@ -6,3 +6,5 @@ log/
 run.sh
 bluebot
 phrases/
+*.mp3
+*.json

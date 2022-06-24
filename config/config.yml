@@ -5,3 +5,4 @@ CivListPath: /var/lib/bluebot/civ_list.csv
 CivSelections: 3
 GoogleKeyPath: /etc/bluebot/google_token.json
 DiscordTokenPath: /etc/bluebot/token.txt
+VoicePresetsPath: /var/lib/bluebot/voice_presets.json 
