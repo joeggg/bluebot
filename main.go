@@ -21,6 +21,7 @@ var commands = map[string]util.HandlerFunc{
 	"tell":     command.HandleTell,
 	"say":      command.HandleSay,
 	"setvoice": command.HandleSetVoice,
+	"taxes":    command.HandleTaxes,
 	"yt":       command.HandleYT,
 }
 
@@ -32,6 +33,13 @@ func AddImageCommands() {
 		) error {
 			return command.HandleImage(session, msg, settings, args)
 		}
+	}
+}
+
+func VoiceHandler(session *discordgo.Session, msg *discordgo.VoiceStateUpdate) {
+	err := command.HandleVoiceState(session, msg)
+	if err != nil {
+		log.Printf("Voice state update handling failed: %s", err)
 	}
 }
 
@@ -98,6 +106,7 @@ func main() {
 	}
 
 	discord.AddHandler(MessageHandler)
+	discord.AddHandler(VoiceHandler)
 
 	log.Println("bluebot is ready to rumble")
 

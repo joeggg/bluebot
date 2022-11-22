@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var Cfg = Config{}
+var Cfg = &Config{}
 
 var DiscordToken string
 
@@ -58,7 +58,7 @@ func LoadConfig() error {
 
 	decoder := yaml.NewDecoder(file)
 
-	if err = decoder.Decode(&Cfg); err != nil {
+	if err = decoder.Decode(Cfg); err != nil {
 		return err
 	} else if DiscordToken, err = ReadDiscordToken(); err != nil {
 		return err
@@ -99,13 +99,11 @@ func loadImageSettings() error {
 
 func loadPhrases() error {
 	var err error
-	Phrases["say"], err = loadPhraseList("say")
-	if err != nil {
-		return err
-	}
-	Phrases["wrongcommand"], err = loadPhraseList("wrongcommand")
-	if err != nil {
-		return err
+	for _, category := range []string{"say", "wrongcommand", "taxes"} {
+		Phrases[category], err = loadPhraseList(category)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
