@@ -58,6 +58,29 @@ Run `scripts/install.sh test` in a shell in the repo folder. The necessary folde
 
 As with the systemd install, you must have the 2 required tokens at `./token/token.txt` and `./token/google_token.json`. 
 
+
+## Image Commands
+
+Bluebot allows for loading custom commands for generating memes. Each command will take an image and paste text you provide onto the image. In a file `data/images.json` you specify the command name, filename and (x, y) pixel coordinates of location of the text (the text is centred on the pixel).
+
+JSON file format:
+```
+{
+    "disgust": {
+        "filename": "disgust.png",
+        "text_x": 180,
+        "text_y": 180
+    }
+    ...
+}
+```
+Example output in Discord:
+```
+> %disgust you
+```
+![image](https://user-images.githubusercontent.com/47352958/203411509-a7ea1653-733b-4114-9800-f15c68dd4497.png)
+
+
 ## Phrases
 
 In certain instances, the bot will message the text channel with a random phrase from lists of phrases you have to provide. These lists should go in `data/phrases/<name>.json` and will be copied to the correct location when installed (or left there if test install).
@@ -68,7 +91,7 @@ The current lists in use are:
 
 If no phrases are provided for one of the given situations, the bot will just response with `Hello!`.
 
-The format for the JSON files is:
+JSON file format:
 ```
 {
     "data": [
@@ -79,11 +102,12 @@ The format for the JSON files is:
 }
 ```
 
+
 ## Voice presets
 
 Place a JSON file at `data/voice_presets.json` before installing to load your own presets. At least a default voice is required for the `%tell` command to work. The keys for the preset correspond to the settings seen on the Google page for Text-to-Speech linked above.
 
-The format for the JSON file is:
+JSON file format:
 ```
 {
     "default": {
