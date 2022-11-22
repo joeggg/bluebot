@@ -12,11 +12,18 @@ func HandleVoiceState(session *discordgo.Session, msg *discordgo.VoiceStateUpdat
 		if err != nil {
 			return err
 		}
-		if user.User.Username == "bluebot" {
+		if user.User.ID == session.State.User.ID {
 			return nil
 		}
 
-		err = generateVoice(fmt.Sprintf("Hello %s", user.Nick))
+		var name string
+		if user.Nick == "" {
+			name = user.User.Username
+		} else {
+			name = user.Nick
+		}
+
+		err = generateVoice(fmt.Sprintf("Hello %s", name))
 		if err != nil {
 			return err
 		}
