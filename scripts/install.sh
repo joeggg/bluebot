@@ -25,8 +25,6 @@ else
         fi
         sudo useradd -m -d $INSTALL_DIR $NAME
     fi
-
-    sudo chown -R $NAME $INSTALL_DIR
 fi
 
 echo "** Creating any required folders **"
@@ -63,12 +61,14 @@ if [ "$1" != "test" ]; then
     sudo cp -r data/. $DATA_DIR
     sudo mv config/config.yml $CFG_DIR 
     sudo mv scripts/bluebot.service /etc/systemd/system
-    sudo chown -R $NAME $CFG_DIR $LOG_DIR $DATA_DIR
+    sudo cp $NAME $INSTALL_DIR
+    sudo chown -R $NAME $INSTALL_DIR $CFG_DIR $LOG_DIR $DATA_DIR
     sudo systemctl daemon-reload
     sudo systemctl restart bluebot.service
     echo "Successfully installed service"
 else
     echo "CONFIG=\"config/test_config.yml\" ./bluebot" > run.sh
+    echo "Giving correct permissions to run script and log file"
     sudo chmod 777 log/
     sudo chmod +x run.sh
 fi
