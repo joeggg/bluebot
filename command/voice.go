@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bluebot/config"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
@@ -23,7 +24,8 @@ func HandleVoiceState(session *discordgo.Session, msg *discordgo.VoiceStateUpdat
 			name = user.Nick
 		}
 
-		err = generateVoice(fmt.Sprintf("Hello %s", name))
+		phrase := config.GetPhrase("greet")
+		err = generateVoice(fmt.Sprintf(phrase, name))
 		if err != nil {
 			return err
 		}
