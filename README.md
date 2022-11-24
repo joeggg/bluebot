@@ -88,6 +88,8 @@ In certain instances, the bot will message the text channel with a random phrase
 The current lists in use are:
 - `say.json` for responses to the `%say` command
 - `wrongcommand.json` for responses to writing an incorrect command keyword
+- `taxes.json` for responses to the `%taxes` command
+- `greet.json` for phrases Bluebot will greet you with when joining. Must contain a `%s` for substituting the username/nickname.
 
 If no phrases are provided for one of the given situations, the bot will just response with `Hello!`.
 
