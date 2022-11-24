@@ -8,3 +8,5 @@ bluebot
 phrases/
 *.mp3
 *.json
+*.png
+images/

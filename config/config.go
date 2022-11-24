@@ -11,19 +11,34 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var Cfg = Config{}
+var Cfg = &Config{}
+
+var DiscordToken string
+
 var Phrases = make(map[string][]string, 0)
+
 var VoicePresets = make(map[string]*VoicePreset, 0)
+
+var ImageSettings = make(map[string]*ImageSetting, 0)
 
 type Config struct {
 	AudioPath         string `yaml:"AudioPath"`
-	LogFilePath       string `yaml:"LogFilePath"`
 	CivListPath       string `yaml:"CivListPath"`
 	CivSelections     int    `yaml:"CivSelections"`
 	GoogleKeyPath     string `yaml:"GoogleKeyPath"`
 	DiscordTokenPath  string `yaml:"DiscordTokenPath"`
+	ImageFontPath     string `yaml:"ImageFontPath"`
+	ImagePath         string `yaml:"ImagePath"`
+	ImageSettingsPath string `yaml:"ImageSettingsPath"`
+	LogFilePath       string `yaml:"LogFilePath"`
 	SettingsDurationS int    `yaml:"SettingsDurationS"`
 	VoicePresetsPath  string `yaml:"VoicePresetsPath"`
+}
+
+type ImageSetting struct {
+	Filename string `json:"filename"`
+	TextX    int    `json:"text_x"`
+	TextY    int    `json:"text_y"`
 }
 
 type VoicePreset struct {
@@ -42,21 +57,20 @@ func LoadConfig() error {
 	defer file.Close()
 
 	decoder := yaml.NewDecoder(file)
-	err = decoder.Decode(&Cfg)
-	if err != nil {
-		return err
-	}
 
-	err = loadVoicePresets()
-	if err != nil {
+	if err = decoder.Decode(Cfg); err != nil {
 		return err
-	}
-	err = loadPhrases()
-	if err != nil {
+	} else if DiscordToken, err = ReadDiscordToken(); err != nil {
 		return err
+	} else if err = loadVoicePresets(); err != nil {
+		return err
+	} else if err = loadImageSettings(); err != nil {
+		return err
+	} else if err = loadPhrases(); err != nil {
+		return err
+	} else {
+		return nil
 	}
-
-	return nil
 }
 
 func loadVoicePresets() error {
@@ -71,15 +85,25 @@ func loadVoicePresets() error {
 	return nil
 }
 
-func loadPhrases() error {
-	var err error
-	Phrases["say"], err = loadPhraseList("say")
+func loadImageSettings() error {
+	data, err := ioutil.ReadFile(Cfg.ImageSettingsPath)
 	if err != nil {
 		return err
 	}
-	Phrases["wrongcommand"], err = loadPhraseList("wrongcommand")
+	err = json.Unmarshal(data, &ImageSettings)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func loadPhrases() error {
+	var err error
+	for _, category := range []string{"say", "wrongcommand", "taxes"} {
+		Phrases[category], err = loadPhraseList(category)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

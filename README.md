@@ -48,15 +48,38 @@ Can be installed as a Linux systemd service to the host system or a remote targe
 The system you install to must have Go installed as well as `libopus-dev`.
 
 ### Systemd
-Either run `scripts/install.sh` for a local install or `scripts/deploy.sh` and pass the ssh target in as the main argument e.g. `./scripts/deploy.sh joe@myserver`.
-Ensure you have a directory called `/opt/bluebot` on the target and you have permission to scp files into it if it's remote. 
+Either run `sudo scripts/install.sh` for a local install or `scripts/deploy.sh` and pass the ssh target in as the main argument e.g. `./scripts/deploy.sh joe@myserver`.
+Ensure you have sudo access over ssh, otherwise manually move the files across and run the install script. The install script creates a user for Bluebot, builds and copies the executable and data/config files their correct install locations, makes a log file at `/var/log/bluebot/logfile.log`, and installs as a systemd service.
 
-You will need to add your own discord token to the file `/etc/bluebot/token.txt` and a Google YouTube API key file `/etc/bluebot/google_token.json` after deploying (service start will fail, restart after adding token)
+You will need to add your own discord token to the file `/etc/bluebot/token.txt` and a Google YouTube API key file `/etc/bluebot/google_token.json`. If done after deploying you must restart the service.
 
 ### Local test
-Run `scripts/install.sh test` in a shell in the repo folder. The necessary folders will be created and the executable built. Then just run `./run.sh` to start the bot. 
+Run `scripts/install.sh test` in a shell in the repo folder. The necessary folders will be created and the executable built locally within the repo. Then just run `./run.sh` to start the bot. 
 
 As with the systemd install, you must have the 2 required tokens at `./token/token.txt` and `./token/google_token.json`. 
+
+
+## Image Commands
+
+Bluebot allows for loading custom commands for generating memes. Each command will take an image and paste text you provide onto the image. In a file `data/images.json` you specify the command name, filename and (x, y) pixel coordinates of location of the text (the text is centred on the pixel). The files should be placed in `data/images/*.png`
+
+JSON file format:
+```
+{
+    "disgust": {
+        "filename": "disgust.png",
+        "text_x": 180,
+        "text_y": 180
+    }
+    ...
+}
+```
+Example output in Discord:
+```
+> %disgust you
+```
+![image](https://user-images.githubusercontent.com/47352958/203411509-a7ea1653-733b-4114-9800-f15c68dd4497.png)
+
 
 ## Phrases
 
@@ -68,7 +91,7 @@ The current lists in use are:
 
 If no phrases are provided for one of the given situations, the bot will just response with `Hello!`.
 
-The format for the JSON files is:
+JSON file format:
 ```
 {
     "data": [
@@ -79,11 +102,12 @@ The format for the JSON files is:
 }
 ```
 
+
 ## Voice presets
 
 Place a JSON file at `data/voice_presets.json` before installing to load your own presets. At least a default voice is required for the `%tell` command to work. The keys for the preset correspond to the settings seen on the Google Text-to-Speech page linked above.
 
-The format for the JSON file is:
+JSON file format:
 ```
 {
     "default": {
