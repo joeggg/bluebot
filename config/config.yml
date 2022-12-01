@@ -5,6 +5,7 @@ GoogleKeyPath: /etc/bluebot/google_token.json
 DiscordTokenPath: /etc/bluebot/token.txt
 ImageFontPath: /usr/share/fonts/truetype/freefont/FreeSans.ttf
 ImagePath: /var/lib/bluebot/images 
+SelfImagePath: /var/lib/bluebot/self_images 
 ImageSettingsPath: /var/lib/bluebot/images.json
 LogFilePath: /var/log/bluebot/logfile.log
 SettingsDurationS: 300

@@ -21,6 +21,7 @@ var commands = map[string]util.HandlerFunc{
 	"tell":     command.HandleTell,
 	"say":      command.HandleSay,
 	"setvoice": command.HandleSetVoice,
+	"show":     command.HandleShow,
 	"taxes":    command.HandleTaxes,
 	"yt":       command.HandleYT,
 }

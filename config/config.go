@@ -29,6 +29,7 @@ type Config struct {
 	DiscordTokenPath  string `yaml:"DiscordTokenPath"`
 	ImageFontPath     string `yaml:"ImageFontPath"`
 	ImagePath         string `yaml:"ImagePath"`
+	SelfImagePath     string `yaml:"SelfImagePath"`
 	ImageSettingsPath string `yaml:"ImageSettingsPath"`
 	LogFilePath       string `yaml:"LogFilePath"`
 	SettingsDurationS int    `yaml:"SettingsDurationS"`

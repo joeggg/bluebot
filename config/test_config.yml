@@ -5,6 +5,7 @@ GoogleKeyPath: token/google_token.json
 DiscordTokenPath: token/token.txt
 ImageFontPath: /mnt/c/Windows/Fonts/Arial.ttf
 ImagePath: data/images
+SelfImagePath: data/self_images 
 ImageSettingsPath: data/images.json 
 LogFilePath: log/logfile.log
 SettingsDurationS: 300
