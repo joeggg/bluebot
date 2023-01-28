@@ -100,7 +100,9 @@ func loadImageSettings() error {
 
 func loadPhrases() error {
 	var err error
-	categories := []string{"say", "wrongcommand", "taxes", "greet"}
+	categories := []string{
+		"say", "wrongcommand", "taxes", "first_greet", "normal_greet", "busy_greet",
+	}
 	for _, category := range categories {
 		Phrases[category], err = loadPhraseList(category)
 		if err != nil {

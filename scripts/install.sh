@@ -53,7 +53,6 @@ echo "Done building"
 
 if [ "$1" != "test" ]; then
     # Add run script
-    sudo rm run.sh 2> /dev/null
     echo "CONFIG=\"$CFG_DIR/config.yml\" ./bluebot" > run.sh
     sudo chmod +x run.sh
 
