@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"golang.org/x/exp/maps"
 )
 
 // Mapping of commands to handler functions
@@ -23,7 +24,6 @@ var commands = map[string]util.HandlerFunc{
 	"setvoice": command.HandleSetVoice,
 	"show":     command.HandleShow,
 	"taxes":    command.HandleTaxes,
-	"yt":       command.HandleYT,
 }
 
 func AddImageCommands() {
@@ -95,6 +95,7 @@ func Setup() {
 func main() {
 	Setup()
 	AddImageCommands()
+	maps.Copy(commands, command.MusicCommands)
 
 	discord, err := discordgo.New("Bot " + config.DiscordToken)
 	if err != nil {

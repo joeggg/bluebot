@@ -12,58 +12,18 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var subCommands = map[string]util.HandlerFunc{
+var MusicCommands = map[string]util.HandlerFunc{
 	"queue":  handleQueue,
 	"list":   handleList,
-	"next":   handleEvent,
-	"play":   handlePlay,
-	"pause":  handleEvent,
-	"resume": handleEvent,
-	"stop":   handleEvent,
+	"next":   handleNext,
+	"pause":  handlePause,
+	"resume": handleResume,
+	"stop":   handleStop,
 }
 
 /*
-	Handle any music related command
-*/
-func HandleYT(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
-	if len(args) < 1 {
-		session.ChannelMessageSend(msg.ChannelID, "Invalid yt command")
-		return nil
-	}
-
-	if subCommand, ok := subCommands[args[0]]; !ok {
-		session.ChannelMessageSend(msg.ChannelID, "Unknown music command")
-		return nil
-	} else {
-		return subCommand(session, msg, args)
-	}
-}
-
-/*
-	Begin the download and playback of audio from a YT video or playlist link
-*/
-func handlePlay(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
-	voiceChannelID := getAuthorVoiceChannel(session, msg)
-	if voiceChannelID == "" {
-		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
-		return nil
-	}
-
-	if _, ok := Subscriptions[voiceChannelID]; ok {
-		session.ChannelMessageSend(msg.ChannelID, "Already playing music")
-		return nil
-	}
-
-	if len(args) < 2 {
-		session.ChannelMessageSend(msg.ChannelID, "No URL given")
-		return nil
-	}
-
-	return runPlayer(session, msg, voiceChannelID, args[1:])
-}
-
-/*
-	Add a video or playlist to the queue of an existing subscription
+	Begin the download and playback of audio from a YT video or playlist link or add to the queue
+	of an existing subscription
 */
 func handleQueue(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
 	voiceChannelID := getAuthorVoiceChannel(session, msg)
@@ -72,18 +32,18 @@ func handleQueue(session *discordgo.Session, msg *discordgo.MessageCreate, args 
 		return nil
 	}
 
-	if len(args) < 2 {
+	if len(args) < 1 {
 		session.ChannelMessageSend(msg.ChannelID, "No URL given")
 		return nil
 	}
 
 	// Start playing music if none currently being played
 	if _, ok := Subscriptions[voiceChannelID]; !ok {
-		return runPlayer(session, msg, voiceChannelID, args[1:])
+		return runPlayer(session, msg, voiceChannelID, args)
 	}
 	sub := Subscriptions[voiceChannelID]
 
-	sub.AddToQueue(session, msg.ChannelID, args[1:])
+	sub.AddToQueue(session, msg.ChannelID, args)
 	return nil
 }
 
@@ -111,13 +71,29 @@ func handleList(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 	return nil
 }
 
-func handleEvent(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+func handleNext(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	return handleEvent(session, msg, "next")
+}
+
+func handlePause(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	return handleEvent(session, msg, "pause")
+}
+
+func handleResume(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	return handleEvent(session, msg, "resume")
+}
+
+func handleStop(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	return handleEvent(session, msg, "stop")
+}
+
+func handleEvent(session *discordgo.Session, msg *discordgo.MessageCreate, event string) error {
 	voiceChannelID := getAuthorVoiceChannel(session, msg)
 	if _, ok := Subscriptions[voiceChannelID]; !ok {
 		session.ChannelMessageSend(msg.ChannelID, "No music playing")
 		return nil
 	}
-	Subscriptions[voiceChannelID].Events <- args[0]
+	Subscriptions[voiceChannelID].Events <- event
 	return nil
 }
 
