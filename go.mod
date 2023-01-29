@@ -8,21 +8,20 @@ require (
 	github.com/fogleman/gg v1.3.0
 	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/jellydator/ttlcache/v3 v3.0.1
-	github.com/kkdai/youtube/v2 v2.7.18
 	google.golang.org/api v0.108.0
 	gopkg.in/yaml.v3 v3.0.1
 	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
 
 require (
-	cloud.google.com/go/compute v1.15.1 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+)
+
+require (
+	cloud.google.com/go/compute v1.18.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
-	github.com/abema/go-mp4 v0.7.2 // indirect
-	github.com/bitly/go-simplejson v0.5.0 // indirect
-	github.com/dlclark/regexp2 v1.8.0 // indirect
-	github.com/dop251/goja v0.0.0-20230122112309-96b1610dd4f7 // indirect
 	github.com/ebml-go/ebml v0.0.0-20221114152929-d226b1da0cc9 // indirect
-	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -41,8 +40,7 @@ require (
 	golang.org/x/sys v0.4.0 // indirect
 	golang.org/x/text v0.6.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20230119192704-9d59e20e5cd1 // indirect
-	google.golang.org/grpc v1.52.0 // indirect
+	google.golang.org/genproto v0.0.0-20230127162408-596548ed4efa // indirect
+	google.golang.org/grpc v1.52.3 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
-	gopkg.in/hraban/opus.v2 v2.0.0-20220302220929-eeacdbcb92d0 // indirect
 )
