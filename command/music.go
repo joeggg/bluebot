@@ -62,7 +62,12 @@ func handleList(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 		max = numTracks
 	}
 	for i := 0; i < max; i++ {
-		output += fmt.Sprintf("%d - %s\n", i+1, sub.QueueView[i].Title)
+		output += fmt.Sprintf("%d - %s", i+1, sub.QueueView[i].Title)
+		if i == 0 {
+			output += " <--\n"
+		} else {
+			output += "\n"
+		}
 	}
 	if numTracks > max {
 		output += fmt.Sprintf("...and %d more tracks", numTracks-max)
