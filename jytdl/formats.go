@@ -42,15 +42,15 @@ type FormatRequest struct {
 
 type FormatResponse struct {
 	Microformat struct {
-		Player_Microformat_Renderer struct {
+		PlayerMicroformatRenderer struct {
 			Publish_Date string `json:"publishDate"`
 		} `json:"playerMicroformatRenderer"`
 	}
-	Playability_Status Status `json:"playabilityStatus"`
-	Streaming_Data     struct {
-		Adaptive_Formats []Format `json:"adaptiveFormats"`
+	PlayabilityStatus Status `json:"playabilityStatus"`
+	StreamingData     struct {
+		AdaptiveFormats []Format `json:"adaptiveFormats"`
 	} `json:"streamingData"`
-	Video_Details struct {
+	VideoDetails struct {
 		Author            string
 		Length_Seconds    int64  `json:"lengthSeconds,string"`
 		Short_Description string `json:"shortDescription"`
@@ -127,5 +127,5 @@ func GetFormats(videoID string, token *Token) (*[]Format, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&formats); err != nil {
 		return nil, err
 	}
-	return &formats.Streaming_Data.Adaptive_Formats, nil
+	return &formats.StreamingData.AdaptiveFormats, nil
 }
