@@ -3,7 +3,7 @@ set -e
 # Assumes token already there and you can scp to /opt/bluebot
 TARGET="$1"
 FOLDER="bluebot-copy"
-FILES="command/ config/ data/ scripts/ util/ main.go go.mod go.sum"
+FILES="command/ config/ data/ jytdl/ scripts/ util/ main.go go.mod go.sum"
 
 ssh $TARGET "rm -rf $FOLDER && mkdir $FOLDER"
 scp -r $FILES $TARGET:~/$FOLDER

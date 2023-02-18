@@ -2,13 +2,12 @@ package command
 
 import (
 	"bluebot/config"
+	"bluebot/jytdl"
 	"bluebot/util"
 	"context"
 	"crypto/md5"
 	"crypto/rand"
-	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"strings"
@@ -77,9 +76,8 @@ func NewSubscription() (*Subscription, error) {
 }
 
 /*
-	Add a video or playlist to the queue and downloads channel. Directly get the metadata and add
-	to queue if a URL otherwise first search youtube and use the first valid result
-
+Add a video or playlist to the queue and downloads channel. Directly get the metadata and add
+to queue if a URL otherwise first search youtube and use the first valid result
 */
 func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, terms []string) {
 	if MaxQueueLen-len(sub.Queue) < 1 {
@@ -127,7 +125,7 @@ func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, ter
 }
 
 /*
-	Search youtube for a list of videos or playlists
+Search youtube for a list of videos or playlists
 */
 func searchYT(query string) ([]*youtube.SearchResult, error) {
 	ctx := context.Background()
@@ -144,7 +142,7 @@ func searchYT(query string) ([]*youtube.SearchResult, error) {
 }
 
 /*
-	Get the list of videos for a playlist and add them to the download queue
+Get the list of videos for a playlist and add them to the download queue
 */
 func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, ID string) error {
 	ctx := context.Background()
@@ -179,8 +177,8 @@ func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, ID
 }
 
 /*
-	Get metadata including audio formats for a video from its URL and add to the
-	queue & downloads channel
+Get metadata including audio formats for a video from its URL and add to the
+queue & downloads channel
 */
 func (sub *Subscription) addVideo(
 	session *discordgo.Session, chID string, URL string, isShowingMessage bool,
@@ -201,11 +199,11 @@ func (sub *Subscription) addVideo(
 }
 
 /*
-	Manages downloading and saving tracks using the metadata added to the downloads channel
-	by the queue manager
+Manages downloading and saving tracks using the metadata added to the downloads channel
+by the queue manager
 
-	Puts the Track object containing the filename on the tracks channel to be picked up by the
-	playback manager
+Puts the Track object containing the filename on the tracks channel to be picked up by the
+playback manager
 */
 func (sub *Subscription) ManageDownloads(ctx context.Context) {
 	for {
@@ -248,13 +246,13 @@ func (sub *Subscription) removeQueueItem(video *ytdl.Video) {
 }
 
 /*
-	Play over the dowloaded tracks from the track channel by parsing the WebM and directly sending
-	the opus packets, deleting each track's file after it's finished
+Play over the dowloaded tracks from the track channel by parsing the WebM and directly sending
+the opus packets, deleting each track's file after it's finished
 
-	Accepts control events through the events channel
+# Accepts control events through the events channel
 
-	Waits for a bit when the track channel is empty before closing in case download is slow.
-	There's a long timeout on the parsed WebM channel for a similar reason
+Waits for a bit when the track channel is empty before closing in case download is slow.
+There's a long timeout on the parsed WebM channel for a similar reason
 */
 func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string, vc *discordgo.VoiceConnection) error {
 	for {
@@ -317,8 +315,8 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 }
 
 /*
-	Wait for an event through the channel to end the pause.
-	Returns true if we need to stop rather than just resume
+Wait for an event through the channel to end the pause.
+Returns true if we need to stop rather than just resume
 */
 func WaitForResume(ch chan string) bool {
 	for {
@@ -337,50 +335,23 @@ func WaitForResume(ch chan string) bool {
 }
 
 /*
-	Download a youtube video's audio to a WebM file with opus audio and return a Track object
+Download a youtube video's audio to a WebM file with opus audio and return a Track object
 */
 func downloadAudio(folder string, video *ytdl.Video) (*Track, error) {
-	format, err := getFirstOpusFormat(&video.Formats)
-	if err != nil {
-		return nil, err
-	}
-
 	log.Printf("Downloading audio file for %s\n", video.ID)
-	client := ytdl.Client{}
-	stream, _, err := client.GetStream(video, format)
-	if err != nil {
-		return nil, err
-	}
 
 	// Create unique file name
 	randHex, err := util.RandomHex(4)
 	if err != nil {
 		return nil, err
 	}
-	filename := fmt.Sprintf("%s/%s-%s.webm", folder, video.ID, randHex)
-	// Must save to file for webm decoder
-	file, err := os.Create(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	_, err = io.Copy(file, stream)
+	filename := fmt.Sprintf("%s/%s-%s.weba", folder, video.ID, randHex)
+
+	err = jytdl.GetAudio(video.ID, filename, "audio/webm")
 	if err != nil {
 		return nil, err
 	}
 	log.Printf("Finished downloading for %s\n", video.ID)
 
 	return &Track{filename, video.Title}, nil
-}
-
-/*
-	Find first opus format youtube audio
-*/
-func getFirstOpusFormat(formats *ytdl.FormatList) (*ytdl.Format, error) {
-	for _, format := range *formats {
-		if format.AudioChannels > 0 && strings.Contains(format.MimeType, "opus") {
-			return &format, nil
-		}
-	}
-	return nil, errors.New("no format could be found")
 }
