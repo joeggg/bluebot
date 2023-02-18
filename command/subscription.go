@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -18,7 +19,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/ebml-go/webm"
-	ytdl "github.com/kkdai/youtube/v2"
 	"google.golang.org/api/youtube/v3"
 )
 
@@ -33,17 +33,18 @@ var UsedIDs = make(map[string]bool)
 
 // Each instance of the bot playing in a voice channel is a "Subscription"
 type Subscription struct {
-	ID        string           // Unique ID
-	Folder    string           // Base folder + ID
-	Queue     []*ytdl.Video    // All videos in queue, downloaded or not, needed for displaying queue
-	mu        *sync.Mutex      // To prevent race condition on queue append
-	Events    chan string      // Event queue (user actions such as pause, next etc.)
-	Downloads chan *ytdl.Video // To download queue
-	Tracks    chan *Track      // Downloaded tracks queue
+	ID        string      // Unique ID
+	Folder    string      // Base folder + ID
+	QueueView []*Track    // All videos in queue, downloaded or not, needed for displaying queue
+	mu        *sync.Mutex // To prevent race condition on queue append
+	Events    chan string // Event queue (user actions such as pause, next etc.)
+	Downloads chan *Track // To download queue
+	Tracks    chan *Track // Downloaded tracks queue
 }
 
 // Represents a downloaded track
 type Track struct {
+	ID       string
 	Filename string
 	Title    string
 }
@@ -67,9 +68,9 @@ func NewSubscription() (*Subscription, error) {
 		ID:        id,
 		Folder:    config.Cfg.AudioPath + "/" + id,
 		mu:        &sync.Mutex{},
-		Queue:     []*ytdl.Video{},
+		QueueView: []*Track{},
 		Events:    make(chan string),
-		Downloads: make(chan *ytdl.Video, MaxQueueLen),
+		Downloads: make(chan *Track, MaxQueueLen),
 		Tracks:    make(chan *Track, MaxQueueLen),
 	}
 	return sub, nil
@@ -80,7 +81,7 @@ Add a video or playlist to the queue and downloads channel. Directly get the met
 to queue if a URL otherwise first search youtube and use the first valid result
 */
 func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, terms []string) {
-	if MaxQueueLen-len(sub.Queue) < 1 {
+	if MaxQueueLen-len(sub.QueueView) < 1 {
 		session.ChannelMessageSend(chID, "Max queue length reached")
 		return
 	}
@@ -97,7 +98,8 @@ func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, ter
 		// Use first result with an ID that can be added
 		for i := range items {
 			if items[i].Id.VideoId != "" {
-				err = sub.addVideo(session, chID, items[i].Id.VideoId, true)
+				track := &Track{items[i].Id.VideoId, "", items[i].Snippet.Title}
+				err = sub.addVideo(session, chID, track, true)
 
 			} else if items[i].Id.PlaylistId != "" {
 				err = sub.addPlaylist(session, chID, items[i].Id.PlaylistId)
@@ -113,7 +115,10 @@ func (sub *Subscription) AddToQueue(session *discordgo.Session, chID string, ter
 		// Use the given URL
 		URL := terms[0]
 		if !strings.Contains(URL, "list=") {
-			err = sub.addVideo(session, chID, URL, true)
+			track, err := trackFromURL(URL)
+			if err == nil {
+				err = sub.addVideo(session, chID, track, true) //lint:ignore SA4006 error is handled
+			}
 		} else {
 			err = sub.addPlaylist(session, chID, strings.Split(URL, "list=")[1])
 		}
@@ -141,6 +146,26 @@ func searchYT(query string) ([]*youtube.SearchResult, error) {
 	return results.Items, nil
 }
 
+func trackFromURL(URL string) (*Track, error) {
+	ctx := context.Background()
+	service, err := youtube.NewService(ctx, option.WithCredentialsFile(config.Cfg.GoogleKeyPath))
+	if err != nil {
+		return nil, err
+	}
+
+	parts := []string{"snippet"}
+	vid := strings.Split(URL, "v=")[1]
+	videos, err := service.Videos.List(parts).Id(vid).Do()
+	if err != nil {
+		return nil, err
+	}
+	if len(videos.Items) < 1 {
+		return nil, errors.New("no video found for given ID")
+	}
+
+	return &Track{vid, "", videos.Items[0].Snippet.Title}, nil
+}
+
 /*
 Get the list of videos for a playlist and add them to the download queue
 */
@@ -151,7 +176,7 @@ func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, ID
 		return err
 	}
 	parts := []string{"snippet"}
-	maxResults := int64(MaxQueueLen - len(sub.Queue))
+	maxResults := int64(MaxQueueLen - len(sub.QueueView))
 	results, err := service.PlaylistItems.List(parts).PlaylistId(ID).MaxResults(maxResults).Do()
 	if err != nil {
 		return err
@@ -160,8 +185,8 @@ func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, ID
 	tracksAdded := 0
 	message, _ := session.ChannelMessageSend(chID, "--> Adding playlist to the queue...")
 	for _, item := range results.Items {
-		videoID := item.Snippet.ResourceId.VideoId
-		err := sub.addVideo(session, chID, videoID, false)
+		track := &Track{item.Snippet.ResourceId.VideoId, "", item.Snippet.Title}
+		err := sub.addVideo(session, chID, track, false)
 		// Count tracks added for condensed message
 		if err == nil {
 			tracksAdded++
@@ -181,19 +206,14 @@ Get metadata including audio formats for a video from its URL and add to the
 queue & downloads channel
 */
 func (sub *Subscription) addVideo(
-	session *discordgo.Session, chID string, URL string, isShowingMessage bool,
+	session *discordgo.Session, chID string, track *Track, isShowingMessage bool,
 ) error {
-	client := ytdl.Client{}
-	video, err := client.GetVideo(URL)
-	if err != nil {
-		return err
-	}
+	sub.Downloads <- track
 	sub.mu.Lock()
-	sub.Queue = append(sub.Queue, video)
+	sub.QueueView = append(sub.QueueView, track)
 	sub.mu.Unlock()
-	sub.Downloads <- video
 	if isShowingMessage {
-		session.ChannelMessageSend(chID, fmt.Sprintf("--> Added track [ %s ] to the queue", video.Title))
+		session.ChannelMessageSend(chID, fmt.Sprintf("--> Added track [ %s ] to the queue", track.Title))
 	}
 	return nil
 }
@@ -213,12 +233,12 @@ func (sub *Subscription) ManageDownloads(ctx context.Context) {
 		}
 		select {
 		// Get video metadata from queue and download the audio file
-		case video := <-sub.Downloads:
-			track, err := downloadAudio(sub.Folder, video)
+		case track := <-sub.Downloads:
+			err := downloadAudio(sub.Folder, track)
 			if err != nil {
-				log.Printf("Failed to download file for %s", video.ID)
+				log.Printf("Failed to download file for %s", track.ID)
 				log.Println(err)
-				sub.removeQueueItem(video)
+				sub.removeQueueItem(track)
 				continue
 			}
 			sub.Tracks <- track
@@ -233,12 +253,34 @@ func (sub *Subscription) ManageDownloads(ctx context.Context) {
 	}
 }
 
-func (sub *Subscription) removeQueueItem(video *ytdl.Video) {
-	// Remove element from queue
-	for i, item := range sub.Queue {
-		if item.ID == video.ID {
+/*
+Download a youtube video's audio to a WebM file with opus audio.
+Sets the output filename on the track object
+*/
+func downloadAudio(folder string, track *Track) error {
+	log.Printf("Downloading audio file for %s\n", track.ID)
+	// Create unique file name
+	randHex, err := util.RandomHex(4)
+	if err != nil {
+		return err
+	}
+	filename := fmt.Sprintf("%s/%s-%s.weba", folder, track.ID, randHex)
+	// Download
+	err = jytdl.GetAudio(track.ID, filename, "audio/webm")
+	if err != nil {
+		return err
+	}
+	log.Printf("Finished downloading for %s\n", track.ID)
+	track.Filename = filename
+	return nil
+}
+
+func (sub *Subscription) removeQueueItem(track *Track) {
+	// Remove element from queue view
+	for i, item := range sub.QueueView {
+		if item.ID == track.ID {
 			sub.mu.Lock()
-			sub.Queue = append(sub.Queue[:i], sub.Queue[i+1:]...)
+			sub.QueueView = append(sub.QueueView[:i], sub.QueueView[i+1:]...)
 			sub.mu.Unlock()
 			break
 		}
@@ -305,7 +347,7 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 			file.Close()
 			os.Remove(track.Filename)
 			sub.mu.Lock()
-			sub.Queue = sub.Queue[1:]
+			sub.QueueView = sub.QueueView[1:]
 			sub.mu.Unlock()
 		// Wait 20 seconds after queue is empty
 		case <-time.After(60 * time.Second):
@@ -332,26 +374,4 @@ func WaitForResume(ch chan string) bool {
 			time.Sleep(time.Millisecond * 500)
 		}
 	}
-}
-
-/*
-Download a youtube video's audio to a WebM file with opus audio and return a Track object
-*/
-func downloadAudio(folder string, video *ytdl.Video) (*Track, error) {
-	log.Printf("Downloading audio file for %s\n", video.ID)
-
-	// Create unique file name
-	randHex, err := util.RandomHex(4)
-	if err != nil {
-		return nil, err
-	}
-	filename := fmt.Sprintf("%s/%s-%s.weba", folder, video.ID, randHex)
-
-	err = jytdl.GetAudio(video.ID, filename, "audio/webm")
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("Finished downloading for %s\n", video.ID)
-
-	return &Track{filename, video.Title}, nil
 }

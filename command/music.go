@@ -22,8 +22,8 @@ var MusicCommands = map[string]util.HandlerFunc{
 }
 
 /*
-	Begin the download and playback of audio from a YT video or playlist link or add to the queue
-	of an existing subscription
+Begin the download and playback of audio from a YT video or playlist link or add to the queue
+of an existing subscription
 */
 func handleQueue(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
 	voiceChannelID := getAuthorVoiceChannel(session, msg)
@@ -56,13 +56,13 @@ func handleList(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 
 	sub := Subscriptions[voiceChannelID]
 	output := "\\~~\\~~\\~~\\~~\\~~\\~~ Current queue \\~~\\~~\\~~\\~~\\~~\\~~\n"
-	numTracks := len(sub.Queue)
+	numTracks := len(sub.QueueView)
 	max := MaxListDisplay
 	if numTracks < max {
 		max = numTracks
 	}
 	for i := 0; i < max; i++ {
-		output += fmt.Sprintf("%d - %s\n", i+1, sub.Queue[i].Title)
+		output += fmt.Sprintf("%d - %s\n", i+1, sub.QueueView[i].Title)
 	}
 	if numTracks > max {
 		output += fmt.Sprintf("...and %d more tracks", numTracks-max)
@@ -98,7 +98,7 @@ func handleEvent(session *discordgo.Session, msg *discordgo.MessageCreate, event
 }
 
 /*
-	Run a music player for a voice channel, from start to finish
+Run a music player for a voice channel, from start to finish
 */
 func runPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceChannelID string, terms []string) error {
 	// Make subscription object
@@ -154,7 +154,7 @@ func runPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 }
 
 /*
-	Find if a the message author is in a channel and join it
+Find if a the message author is in a channel and join it
 */
 func getAuthorVoiceChannel(session *discordgo.Session, msg *discordgo.MessageCreate) string {
 	// Find sender's voice channel
