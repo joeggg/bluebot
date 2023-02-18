@@ -129,6 +129,7 @@ func runPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 		time.Sleep(500 * time.Millisecond)
 		if time.Since(start) > 60*time.Second {
 			// Nothing was added
+			log.Printf("Removing subscription for user %s", msg.Author.Username)
 			return nil
 		}
 	}

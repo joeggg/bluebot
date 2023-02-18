@@ -218,7 +218,7 @@ func (sub *Subscription) ManageDownloads(ctx context.Context) {
 		case video := <-sub.Downloads:
 			track, err := downloadAudio(sub.Folder, video)
 			if err != nil {
-				log.Printf("Failed to download file for %s", video.Title)
+				log.Printf("Failed to download file for %s", video.ID)
 				log.Println(err)
 				sub.removeQueueItem(video)
 				continue
@@ -310,7 +310,7 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 			sub.Queue = sub.Queue[1:]
 			sub.mu.Unlock()
 		// Wait 20 seconds after queue is empty
-		case <-time.After(20 * time.Second):
+		case <-time.After(60 * time.Second):
 			return nil
 		}
 	}
@@ -345,7 +345,7 @@ func downloadAudio(folder string, video *ytdl.Video) (*Track, error) {
 		return nil, err
 	}
 
-	log.Println("Downloading audio file")
+	log.Printf("Downloading audio file for %s\n", video.ID)
 	client := ytdl.Client{}
 	stream, _, err := client.GetStream(video, format)
 	if err != nil {
@@ -368,6 +368,7 @@ func downloadAudio(folder string, video *ytdl.Video) (*Track, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("Finished downloading for %s\n", video.ID)
 
 	return &Track{filename, video.Title}, nil
 }

@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -142,7 +143,7 @@ func ReadDiscordToken() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(token), err
+	return strings.TrimSpace(string(token)), err
 }
 
 func SetupLogging() error {

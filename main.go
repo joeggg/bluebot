@@ -99,12 +99,12 @@ func main() {
 
 	discord, err := discordgo.New("Bot " + config.DiscordToken)
 	if err != nil {
-		log.Fatalln("Failed to create discord client")
+		log.Fatalf("Failed to create discord client: %s", err)
 	}
 
 	err = discord.Open()
 	if err != nil {
-		log.Fatalln("Failed to open connection to Discord")
+		log.Fatalf("Failed to open connection to Discord: %s", err)
 	}
 
 	discord.AddHandler(MessageHandler)
