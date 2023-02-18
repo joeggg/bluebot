@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -29,6 +30,7 @@ type Config struct {
 	DiscordTokenPath  string `yaml:"DiscordTokenPath"`
 	ImageFontPath     string `yaml:"ImageFontPath"`
 	ImagePath         string `yaml:"ImagePath"`
+	SelfImagePath     string `yaml:"SelfImagePath"`
 	ImageSettingsPath string `yaml:"ImageSettingsPath"`
 	LogFilePath       string `yaml:"LogFilePath"`
 	SettingsDurationS int    `yaml:"SettingsDurationS"`
@@ -99,7 +101,9 @@ func loadImageSettings() error {
 
 func loadPhrases() error {
 	var err error
-	categories := []string{"say", "wrongcommand", "taxes", "greet"}
+	categories := []string{
+		"say", "wrongcommand", "taxes", "first_greet", "normal_greet", "busy_greet",
+	}
 	for _, category := range categories {
 		Phrases[category], err = loadPhraseList(category)
 		if err != nil {
@@ -139,7 +143,7 @@ func ReadDiscordToken() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(token), err
+	return strings.TrimSpace(string(token)), err
 }
 
 func SetupLogging() error {

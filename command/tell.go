@@ -110,7 +110,7 @@ func generateVoice(message string) error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile("data/output.mp3", decoded, 0644)
+	err = ioutil.WriteFile(config.Cfg.AudioPath+"/output.mp3", decoded, 0644)
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func generateVoice(message string) error {
 */
 func playMP3(vc *discordgo.VoiceConnection) error {
 	// Check the file opens first
-	file, err := os.Open("data/output.mp3")
+	file, err := os.Open(config.Cfg.AudioPath + "/output.mp3")
 	if err != nil {
 		return err
 	}

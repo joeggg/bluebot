@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"golang.org/x/exp/maps"
 )
 
 // Mapping of commands to handler functions
@@ -21,8 +22,8 @@ var commands = map[string]util.HandlerFunc{
 	"tell":     command.HandleTell,
 	"say":      command.HandleSay,
 	"setvoice": command.HandleSetVoice,
+	"show":     command.HandleShow,
 	"taxes":    command.HandleTaxes,
-	"yt":       command.HandleYT,
 }
 
 func AddImageCommands() {
@@ -94,15 +95,16 @@ func Setup() {
 func main() {
 	Setup()
 	AddImageCommands()
+	maps.Copy(commands, command.MusicCommands)
 
 	discord, err := discordgo.New("Bot " + config.DiscordToken)
 	if err != nil {
-		log.Fatalln("Failed to create discord client")
+		log.Fatalf("Failed to create discord client: %s", err)
 	}
 
 	err = discord.Open()
 	if err != nil {
-		log.Fatalln("Failed to open connection to Discord")
+		log.Fatalf("Failed to open connection to Discord: %s", err)
 	}
 
 	discord.AddHandler(MessageHandler)

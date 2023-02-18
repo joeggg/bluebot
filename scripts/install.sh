@@ -53,7 +53,6 @@ echo "Done building"
 
 if [ "$1" != "test" ]; then
     # Add run script
-    sudo rm run.sh 2> /dev/null
     echo "CONFIG=\"$CFG_DIR/config.yml\" ./bluebot" > run.sh
     sudo chmod +x run.sh
 
@@ -63,7 +62,7 @@ if [ "$1" != "test" ]; then
     sudo mv scripts/bluebot.service /etc/systemd/system
 
     sudo systemctl stop bluebot.service
-    sudo cp $NAME $INSTALL_DIR
+    sudo cp $NAME run.sh $INSTALL_DIR
     sudo chown -R $NAME $INSTALL_DIR $CFG_DIR $LOG_DIR $DATA_DIR
     sudo systemctl daemon-reload
     sudo systemctl restart bluebot.service

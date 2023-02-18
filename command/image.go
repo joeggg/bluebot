@@ -3,13 +3,38 @@ package command
 import (
 	"bluebot/config"
 	"bluebot/util"
+	"crypto/rand"
+	"fmt"
+	"io/ioutil"
 	"log"
+	"math/big"
 	"os"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/fogleman/gg"
 )
+
+func HandleShow(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	files, err := ioutil.ReadDir(config.Cfg.SelfImagePath)
+	if err != nil {
+		return err
+	}
+	// Get a random file from the images directory
+	max := big.NewInt(int64(len(files)))
+	randnum, _ := rand.Int(rand.Reader, max)
+	i := randnum.Int64()
+	name := files[i].Name()
+
+	r, err := os.Open(fmt.Sprintf("%s/%s", config.Cfg.SelfImagePath, name))
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	session.ChannelFileSend(msg.ChannelID, "pic.png", r)
+	return nil
+}
 
 /*
 	Posts an image to the channel with text overlaid (given in the command)

@@ -6,18 +6,17 @@ The newer Go version of my original Discord bot in Node.js. Just has a small col
 
 All commands start with the `%` symbol followed by a keyword: `%<command>`.
 
-### **%yt**
+### **Music commands**
 
-Joins the voice channel you are in and plays audio from YoutTube links or search terms, with different commands starting with `%yt` followed by a second keyword:
+Joins the voice channel you are in and plays audio from YoutTube links or search terms:
 
 Usage:
-- `%yt play <URL or search term>` Add a video or playlist to the queue and start playing
-- `%yt queue <URL or search term>` Add to the queue once already playing
-- `%yt next` Skip forward to the next track
-- `%yt pause` Pause the music
-- `%yt resume` Resume the music
-- `%yt stop` Stop playing and cancel the whole queue
-- `%yt list` Show the current queue
+- `%queue <URL or search term>` Add a video or playlist to the queue or start playing
+- `%next` Skip forward to the next track
+- `%pause` Pause the music
+- `%resume` Resume the music
+- `%stop` Stop playing and cancel the whole queue
+- `%list` Show the current queue
 
 ### **%civ**
 
@@ -61,7 +60,7 @@ As with the systemd install, you must have the 2 required tokens at `./token/tok
 
 ## Image Commands
 
-Bluebot allows for loading custom commands for generating memes. Each command will take an image and paste text you provide onto the image. In a file `data/images.json` you specify the command name, filename and (x, y) pixel coordinates of location of the text (the text is centred on the pixel). The files should be placed in `data/images/*.png`
+Bluebot allows for loading custom commands for generating memes. Each command will take an image and paste text you provide onto the image. In a file `data/images.json` you specify the command name, filename and (x, y) pixel coordinates of location of the text (the text is centred on the pixel). The files should be placed in `data/images/*.png`. Note: you may need to change the font path in the config for this to work as you might not have the font that's there by default.
 
 JSON file format:
 ```
