@@ -44,7 +44,7 @@ Usage:
 
 ## Installation
 Can be installed as a Linux systemd service to the host system or a remote target. Also can be installed locally within the repo folder for testing.
-The system you install to must have Go installed as well as `libopus-dev`.
+The system you install to must have Go installed as well as `libopus-dev` and `pkg-config`.
 
 ### Systemd
 Either run `sudo scripts/install.sh` for a local install or `scripts/deploy.sh` and pass the ssh target in as the main argument e.g. `./scripts/deploy.sh joe@myserver`.

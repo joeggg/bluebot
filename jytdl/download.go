@@ -10,7 +10,7 @@ import (
 )
 
 const chunk = 10_000_000
-const attempts = 3
+const attempts = 10
 
 func GetAudio(videoID string, filename string, targetFormat string) error {
 	// Try a few times as sometimes fails

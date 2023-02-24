@@ -15,3 +15,13 @@ func HandleTaxes(session *discordgo.Session, msg *discordgo.MessageCreate, args 
 	session.ChannelMessageSend(msg.ChannelID, config.GetPhrase("taxes"))
 	return nil
 }
+
+func HandleMemeOfTheDay(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
+	sck, err := NewWorkerSocket()
+	if err != nil {
+		return err
+	}
+	sck.SendMessage("{}")
+
+	return nil
+}
