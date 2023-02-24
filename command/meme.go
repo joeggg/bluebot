@@ -2,6 +2,7 @@ package command
 
 import (
 	"bluebot/config"
+	"fmt"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -21,7 +22,26 @@ func HandleMemeOfTheDay(session *discordgo.Session, msg *discordgo.MessageCreate
 	if err != nil {
 		return err
 	}
-	sck.SendMessage("{}")
+	sck.Send("memeoftheday", nil)
+	resp, err := sck.Receive()
+	if err != nil {
+		return err
+	}
+
+	data, ok := resp.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("failed to decode response: %s", resp)
+	}
+	session.ChannelMessageSend(
+		msg.ChannelID,
+		fmt.Sprintf(
+			"**%s**\n*by %s in %s*\n%s",
+			data["title"],
+			data["author"],
+			data["subreddit"],
+			data["url"],
+		),
+	)
 
 	return nil
 }
