@@ -3,8 +3,11 @@ package command
 import (
 	"bluebot/util"
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"os"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -95,7 +98,7 @@ func handleEvent(session *discordgo.Session, msg *discordgo.MessageCreate, event
 		session.ChannelMessageSend(msg.ChannelID, "No music playing")
 		return nil
 	}
-	Subscriptions[voiceChannelID].Events <- &Event{event, ""}
+	Subscriptions[voiceChannelID].Events <- event
 	return nil
 }
 
@@ -113,6 +116,11 @@ func runPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 	defer delete(UsedIDs, sub.ID)
 	log.Printf("Created subscription %s for user %s", sub.ID, msg.Author.Username)
 
+	// Make folder for files
+	if err = os.Mkdir(sub.Folder, 0755); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	defer os.RemoveAll(sub.Folder)
 	go sub.AddToQueue(session, msg.ChannelID, terms)
 
 	// File download manager
@@ -120,7 +128,16 @@ func runPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go sub.ManageDownloads(ctx)
-
+	// Wait for 1 track at least downloaded
+	start := time.Now()
+	for len(sub.Tracks) == 0 {
+		time.Sleep(500 * time.Millisecond)
+		if time.Since(start) > 60*time.Second {
+			// Nothing was added
+			log.Printf("Removing subscription for user %s", msg.Author.Username)
+			return nil
+		}
+	}
 	// Join voice channel and start websocket audio communication
 	vc, err := session.ChannelVoiceJoin(msg.GuildID, voiceChannelID, false, true)
 	if err != nil {

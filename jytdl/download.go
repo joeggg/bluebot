@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const ChunkSize = 10_000_000
+const chunk = 10_000_000
 const attempts = 3
 
 func GetAudio(videoID string, filename string, targetFormat string) error {
@@ -30,7 +30,7 @@ func getAudio(videoID string, filename string, targetFormat string) error {
 		return err
 	}
 	// Find correct format
-	format := ExtractFormat(formats, targetFormat)
+	format := extractFormat(formats, targetFormat)
 	if format == nil {
 		return errors.New("no format could be found")
 	}
@@ -38,7 +38,7 @@ func getAudio(videoID string, filename string, targetFormat string) error {
 	return nil
 }
 
-func ExtractFormat(formats *[]Format, target string) *Format {
+func extractFormat(formats *[]Format, target string) *Format {
 	for _, format := range *formats {
 		if strings.Contains(format.MIMEType, target) &&
 			format.AudioQuality == "AUDIO_QUALITY_MEDIUM" {
@@ -66,9 +66,9 @@ func downloadAudio(format *Format, filename string) error {
 	// Iterate over chunks of audio split across requests
 	var pos int64
 	for pos < format.ContentLength {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", pos, pos+ChunkSize-1))
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", pos, pos+chunk-1))
 
-		resp, err := Client.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			return err
 		}
@@ -80,7 +80,7 @@ func downloadAudio(format *Format, filename string) error {
 			return err
 		}
 
-		pos += ChunkSize
+		pos += chunk
 	}
 	return nil
 }

@@ -18,7 +18,7 @@ const (
 	client_secret   = "SboVhoG9s0rNafixCSGGKXAT"
 )
 
-var Client = http.DefaultClient
+var client = http.DefaultClient
 
 type Token struct {
 	AccessToken  string
@@ -117,7 +117,7 @@ func GetFormats(videoID string, token *Token) (*[]Format, error) {
 	}
 	req.Header.Set("X-Goog-API-Key", api_key)
 
-	resp, err := Client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

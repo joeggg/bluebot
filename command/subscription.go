@@ -3,15 +3,14 @@ package command
 import (
 	"bluebot/config"
 	"bluebot/jytdl"
-	"bytes"
+	"bluebot/util"
 	"context"
 	"crypto/md5"
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -24,10 +23,9 @@ import (
 )
 
 var (
-	MaxQueueLen     int = 30 // Max items in the song queue
-	MaxListDisplay  int = 10 // Max queue items to show in %list command
-	AudioBufferSize int = 3  // Number of chunks of audio in advance to hold at a time
-	EventQueueSize  int = 10 // Number of queued events to hold at a time
+	MaxQueueLen     int = 30
+	MaxQueueDisplay int = 3
+	MaxListDisplay  int = 10
 )
 
 var Subscriptions = make(map[string]*Subscription)
@@ -35,17 +33,13 @@ var UsedIDs = make(map[string]bool)
 
 // Each instance of the bot playing in a voice channel is a "Subscription"
 type Subscription struct {
-	ID          string           // Unique ID
-	QueueView   []*Track         // All videos in queue, downloaded or not, needed for displaying queue
-	AudioBuffer chan *AudioChunk // Downloaded WebM audio buffer
-	mu          *sync.Mutex      // To prevent race condition on queue append
-	Events      chan *Event      // Event queue (user actions such as pause, next etc.)
-	Downloads   chan *Track      // To download queue
-}
-
-type Event struct {
-	Type string
-	Args string
+	ID        string      // Unique ID
+	Folder    string      // Base folder + ID
+	QueueView []*Track    // All videos in queue, downloaded or not, needed for displaying queue
+	mu        *sync.Mutex // To prevent race condition on queue append
+	Events    chan string // Event queue (user actions such as pause, next etc.)
+	Downloads chan *Track // To download queue
+	Tracks    chan *Track // Downloaded tracks queue
 }
 
 // Represents a downloaded track
@@ -53,11 +47,6 @@ type Track struct {
 	ID       string
 	Filename string
 	Title    string
-}
-
-type AudioChunk struct {
-	Data  []byte
-	Title string
 }
 
 func NewSubscription() (*Subscription, error) {
@@ -76,12 +65,13 @@ func NewSubscription() (*Subscription, error) {
 		}
 	}
 	sub := &Subscription{
-		ID:          id,
-		mu:          &sync.Mutex{},
-		QueueView:   []*Track{},
-		AudioBuffer: make(chan *AudioChunk, AudioBufferSize),
-		Events:      make(chan *Event, EventQueueSize),
-		Downloads:   make(chan *Track, MaxQueueLen),
+		ID:        id,
+		Folder:    config.Cfg.AudioPath + "/" + id,
+		mu:        &sync.Mutex{},
+		QueueView: []*Track{},
+		Events:    make(chan string),
+		Downloads: make(chan *Track, MaxQueueLen),
+		Tracks:    make(chan *Track, MaxQueueLen),
 	}
 	return sub, nil
 }
@@ -237,17 +227,21 @@ playback manager
 */
 func (sub *Subscription) ManageDownloads(ctx context.Context) {
 	for {
+		// Only download 2 tracks in advance
+		for len(sub.Tracks) > 1 {
+			time.Sleep(time.Second)
+		}
 		select {
 		// Get video metadata from queue and download the audio file
 		case track := <-sub.Downloads:
-			sub.Events <- &Event{"new_track", track.Title}
-			err := sub.downloadAudio(track)
+			err := downloadAudio(sub.Folder, track)
 			if err != nil {
 				log.Printf("Failed to download file for %s", track.ID)
 				log.Println(err)
 				sub.removeQueueItem(track)
 				continue
 			}
+			sub.Tracks <- track
 
 		case <-ctx.Done():
 			log.Println("Closing file download manager")
@@ -263,48 +257,21 @@ func (sub *Subscription) ManageDownloads(ctx context.Context) {
 Download a youtube video's audio to a WebM file with opus audio.
 Sets the output filename on the track object
 */
-func (sub *Subscription) downloadAudio(track *Track) error {
-	log.Printf("Streaming audio for %s\n", track.ID)
+func downloadAudio(folder string, track *Track) error {
+	log.Printf("Downloading audio file for %s\n", track.ID)
+	// Create unique file name
+	randHex, err := util.RandomHex(4)
+	if err != nil {
+		return err
+	}
+	filename := fmt.Sprintf("%s/%s-%s.weba", folder, track.ID, randHex)
 	// Download
-	// Get innertube formats
-	formats, err := jytdl.GetFormats(track.ID, nil)
+	err = jytdl.GetAudio(track.ID, filename, "audio/webm")
 	if err != nil {
 		return err
 	}
-	// Find correct format
-	format := jytdl.ExtractFormat(formats, "audio/webm")
-	if format == nil {
-		return errors.New("no format could be found")
-	}
-
-	req, err := http.NewRequest("GET", format.URL, nil)
-	if err != nil {
-		return err
-	}
-	// Iterate over chunks of audio split across requests
-	var pos int64
-	for pos < format.ContentLength {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", pos, pos+jytdl.ChunkSize-1))
-
-		resp, err := jytdl.Client.Do(req)
-		if err != nil {
-			return err
-		}
-
-		data, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-		sub.AudioBuffer <- &AudioChunk{data, track.Title}
-
-		if err := resp.Body.Close(); err != nil {
-			return err
-		}
-
-		pos += jytdl.ChunkSize
-	}
-
-	log.Printf("Finished streaming for %s\n", track.ID)
+	log.Printf("Finished downloading for %s\n", track.ID)
+	track.Filename = filename
 	return nil
 }
 
@@ -333,20 +300,27 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 	for {
 		// Iterate over the Tracks channel
 		select {
-		case chunk := <-sub.AudioBuffer:
-			// Parse webm
-			var w webm.WebM
-			wr, err := webm.Parse(bytes.NewReader(chunk.Data), &w)
+		case track := <-sub.Tracks:
+			file, err := os.Open(track.Filename)
 			if err != nil {
 				return err
 			}
+
+			// Parse webm
+			var w webm.WebM
+			wr, err := webm.Parse(file, &w)
+			if err != nil {
+				return err
+			}
+			session.ChannelMessageSend(chID, fmt.Sprintf("--> Playing track [ %s ]", track.Title))
+			log.Printf("Playing track [ %s ] for subscription %s", track.Title, sub.ID)
 			// Read opus data from parsed webm and pass into sending channel
 			playing := true
 			for playing {
 				select {
 				// Check for events
 				case event := <-sub.Events:
-					switch event.Type {
+					switch event {
 					case "next":
 						playing = false
 					case "pause":
@@ -354,9 +328,6 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 						if quit {
 							return nil
 						}
-					case "new_song":
-						log.Printf("Playing track [ %s ] for subscription %s", event.Args, sub.ID)
-						session.ChannelMessageSend(chID, fmt.Sprintf("--> Playing track [ %s ]", event.Args))
 					case "stop":
 						return nil
 					default:
@@ -373,6 +344,8 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 				}
 			}
 			// Cleanup file and queue list
+			file.Close()
+			os.Remove(track.Filename)
 			sub.mu.Lock()
 			sub.QueueView = sub.QueueView[1:]
 			sub.mu.Unlock()
@@ -387,13 +360,13 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 Wait for an event through the channel to end the pause.
 Returns true if we need to stop rather than just resume
 */
-func WaitForResume(ch chan *Event) bool {
+func WaitForResume(ch chan string) bool {
 	for {
 		select {
 		case event := <-ch:
-			if event.Type == "resume" {
+			if event == "resume" {
 				return false
-			} else if event.Type == "stop" {
+			} else if event == "stop" {
 				return true
 			}
 			time.Sleep(time.Millisecond * 500)
