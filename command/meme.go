@@ -35,8 +35,10 @@ func HandleMemeOfTheDay(session *discordgo.Session, msg *discordgo.MessageCreate
 	session.ChannelMessageSend(
 		msg.ChannelID,
 		fmt.Sprintf(
-			"**%s**\n*by %s in %s*\n%s",
+			"**%s**\n[⬆️: **%.0f** ⚖️: **%s**]\n*by %s in %s*\n%s",
 			data["title"],
+			data["score"],
+			data["upvote_ratio"],
 			data["author"],
 			data["subreddit"],
 			data["url"],
