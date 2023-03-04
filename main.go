@@ -24,6 +24,7 @@ var commands = map[string]util.HandlerFunc{
 	"setvoice": command.HandleSetVoice,
 	"show":     command.HandleShow,
 	"taxes":    command.HandleTaxes,
+	"motd":     command.HandleMemeOfTheDay,
 }
 
 func AddImageCommands() {

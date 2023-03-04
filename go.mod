@@ -14,6 +14,8 @@ require (
 	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
 
+require github.com/pebbe/zmq4 v1.2.9 // indirect
+
 require (
 	cloud.google.com/go/compute v1.18.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
