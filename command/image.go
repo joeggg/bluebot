@@ -5,7 +5,6 @@ import (
 	"bluebot/util"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/big"
 	"os"
@@ -16,7 +15,7 @@ import (
 )
 
 func HandleShow(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
-	files, err := ioutil.ReadDir(config.Cfg.SelfImagePath)
+	files, err := os.ReadDir(config.Cfg.SelfImagePath)
 	if err != nil {
 		return err
 	}
@@ -37,9 +36,9 @@ func HandleShow(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 }
 
 /*
-	Posts an image to the channel with text overlaid (given in the command)
-	This is a base function that's used to create a command for each image setting
-	provided in the images.json config.
+Posts an image to the channel with text overlaid (given in the command)
+This is a base function that's used to create a command for each image setting
+provided in the images.json config.
 */
 func HandleImage(
 	session *discordgo.Session,

@@ -3,7 +3,6 @@ package config
 import (
 	"crypto/rand"
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"math/big"
 	"os"
@@ -76,7 +75,7 @@ func LoadConfig() error {
 }
 
 func loadVoicePresets() error {
-	data, err := ioutil.ReadFile(Cfg.VoicePresetsPath)
+	data, err := os.ReadFile(Cfg.VoicePresetsPath)
 	if err != nil {
 		return err
 	}
@@ -88,7 +87,7 @@ func loadVoicePresets() error {
 }
 
 func loadImageSettings() error {
-	data, err := ioutil.ReadFile(Cfg.ImageSettingsPath)
+	data, err := os.ReadFile(Cfg.ImageSettingsPath)
 	if err != nil {
 		return err
 	}
@@ -115,7 +114,7 @@ func loadPhrases() error {
 
 func loadPhraseList(filename string) ([]string, error) {
 	var phrases map[string][]string
-	file, err := ioutil.ReadFile(Cfg.AudioPath + "/../phrases/" + filename + ".json")
+	file, err := os.ReadFile(Cfg.AudioPath + "/../phrases/" + filename + ".json")
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +138,7 @@ func GetPhrase(category string) string {
 
 // Read the token as a string from file
 func ReadDiscordToken() (string, error) {
-	token, err := ioutil.ReadFile(Cfg.DiscordTokenPath)
+	token, err := os.ReadFile(Cfg.DiscordTokenPath)
 	if err != nil {
 		return "", err
 	}

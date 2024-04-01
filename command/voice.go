@@ -27,6 +27,10 @@ func HandleVoiceState(session *discordgo.Session, msg *discordgo.VoiceStateUpdat
 		// User left
 	} else if msg.VoiceState.ChannelID == "" {
 		numUsers[msg.BeforeUpdate.ChannelID]--
+		// Ensure cant go less than 0
+		if numUsers[msg.BeforeUpdate.ChannelID] < 0 {
+			numUsers[msg.BeforeUpdate.ChannelID] = 0
+		}
 	}
 
 	return nil
@@ -43,7 +47,7 @@ func greetUser(session *discordgo.Session, msg *discordgo.VoiceStateUpdate, user
 	var phrase, text string
 	if numUsers[msg.ChannelID] == 1 {
 		phrase = config.GetPhrase("first_greet")
-	} else if numUsers[msg.ChannelID] < 5 {
+	} else if numUsers[msg.ChannelID] < 3 {
 		phrase = config.GetPhrase("normal_greet")
 	} else {
 		phrase = config.GetPhrase("busy_greet")

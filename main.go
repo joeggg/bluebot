@@ -4,7 +4,6 @@ import (
 	"bluebot/command"
 	"bluebot/config"
 	"bluebot/util"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -18,13 +17,16 @@ import (
 
 // Mapping of commands to handler functions
 var commands = map[string]util.HandlerFunc{
-	"civ":      command.HandleCiv,
-	"tell":     command.HandleTell,
-	"say":      command.HandleSay,
-	"setvoice": command.HandleSetVoice,
-	"show":     command.HandleShow,
-	"taxes":    command.HandleTaxes,
-	"motd":     command.HandleMemeOfTheDay,
+	"civ":        command.HandleCiv,
+	"tell":       command.HandleTell,
+	"say":        command.HandleSay,
+	"setvoice":   command.HandleSetVoice,
+	"show":       command.HandleShow,
+	"taxes":      command.HandleTaxes,
+	"motd":       command.HandleMemeOfTheDay,
+	"chat":       command.HandleChat,
+	"saychat":    command.HandleSayChat,
+	"reset-chat": command.HandleResetChat,
 }
 
 func AddImageCommands() {
@@ -83,7 +85,7 @@ func Setup() {
 		log.Fatalf("Error setting up log file: %v", err)
 	}
 	// Remove old stored audio from ungraceful shutdown
-	dirs, err := ioutil.ReadDir(config.Cfg.AudioPath)
+	dirs, err := os.ReadDir(config.Cfg.AudioPath)
 	if err != nil {
 		log.Fatalf("Failed to read audio path: %s", err)
 	}
