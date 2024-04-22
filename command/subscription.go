@@ -296,21 +296,25 @@ the opus packets, deleting each track's file after it's finished
 Waits for a bit when the track channel is empty before closing in case download is slow.
 There's a long timeout on the parsed WebM channel for a similar reason
 */
-func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string, vc *discordgo.VoiceConnection) error {
+func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string, vc *discordgo.VoiceConnection, ctx context.Context, cancel context.CancelFunc) {
+	defer cancel()
 	for {
 		// Iterate over the Tracks channel
 		select {
 		case track := <-sub.Tracks:
 			file, err := os.Open(track.Filename)
 			if err != nil {
-				return err
+				log.Printf("An error occurred opening [ %s ] for subscription %s: %s", track.Title, sub.ID, err)
+				session.ChannelMessageSend(chID, fmt.Sprintf("Failed to play [ %s ], skipping", track.Title))
+				continue
 			}
 
 			// Parse webm
 			var w webm.WebM
 			wr, err := webm.Parse(file, &w)
 			if err != nil {
-				return err
+				log.Printf("An error occurred parsing [ %s ] for subscription %s: %s", track.Title, sub.ID, err)
+				session.ChannelMessageSend(chID, fmt.Sprintf("Failed to play [ %s ], skipping", track.Title))
 			}
 			session.ChannelMessageSend(chID, fmt.Sprintf("--> Playing track [ %s ]", track.Title))
 			log.Printf("Playing track [ %s ] for subscription %s", track.Title, sub.ID)
@@ -318,7 +322,7 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 			playing := true
 			for playing {
 				select {
-				// Check for events
+				// Check for events over packets
 				case event := <-sub.Events:
 					switch event {
 					case "next":
@@ -326,10 +330,10 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 					case "pause":
 						quit := WaitForResume(sub.Events)
 						if quit {
-							return nil
+							return
 						}
 					case "stop":
-						return nil
+						return
 					default:
 						continue
 					}
@@ -339,7 +343,9 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 						playing = false
 					}
 					vc.OpusSend <- packet.Data
+				// Move on after 2 seconds of no packets
 				case <-time.After(2 * time.Second):
+					log.Printf("Failed to read any packets for subscription %s", sub.ID)
 					playing = false
 				}
 			}
@@ -349,9 +355,12 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 			sub.mu.Lock()
 			sub.QueueView = sub.QueueView[1:]
 			sub.mu.Unlock()
-		// Wait 20 seconds after queue is empty
-		case <-time.After(60 * time.Second):
-			return nil
+
+		case <-ctx.Done():
+			return
+
+		default:
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
 }
@@ -369,9 +378,8 @@ func WaitForResume(ch chan string) bool {
 			} else if event == "stop" {
 				return true
 			}
-			time.Sleep(time.Millisecond * 500)
 		default:
-			time.Sleep(time.Millisecond * 500)
+			time.Sleep(time.Millisecond * 300)
 		}
 	}
 }

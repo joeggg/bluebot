@@ -25,7 +25,7 @@ func GetAudio(videoID string, filename string, targetFormat string) error {
 
 func getAudio(videoID string, filename string, targetFormat string) error {
 	// Get innertube formats
-	formats, err := GetFormats(videoID, nil)
+	formats, err := GetFormats(videoID)
 	if err != nil {
 		return err
 	}
