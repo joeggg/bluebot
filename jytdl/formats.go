@@ -10,31 +10,36 @@ import (
 const (
 	// com.google.android.youtube
 	// Public youtube player values
-	android_version = "18.04.35"
-	mweb_version    = "2.20230106.01.00"
+	playerParams    = "CgIQBg=="
+	version         = "18.11.34"
+	android_version = 30
 	origin          = "https://www.youtube.com"
-	api_key         = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
-	client_ID       = "861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com"
-	client_secret   = "SboVhoG9s0rNafixCSGGKXAT"
+	api_key         = "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w"
+	userAgent       = "com.google.android.youtube/18.11.34 (Linux; U; Android 11) gzip"
 )
 
 var client = http.DefaultClient
-
-type Token struct {
-	AccessToken  string
-	Error        string
-	RefreshToken string
-}
 
 type FormatRequest struct {
 	ContentCheckOK bool `json:"contentCheckOk,omitempty"`
 	Context        struct {
 		Client struct {
-			Name    string `json:"clientName"`
-			Version string `json:"clientVersion"`
+			Name              string `json:"clientName"`
+			Version           string `json:"clientVersion"`
+			HL                string `json:"hl"`
+			GL                string `json:"gl"`
+			AndroidSDKVersion int    `json:"androidSDKVersion,omitempty"`
+			UserAgent         string `json:"userAgent,omitempty"`
+			TimeZone          string `json:"timeZone"`
+			UTCOffset         int    `json:"utcOffsetMinutes"`
 		} `json:"client"`
 	} `json:"context"`
-	Params      []byte `json:"params,omitempty"`
+	PlaybackContext struct {
+		ContentPlaybackContext struct {
+			HTML5Preference string `json:"html5Preference"`
+		}
+	}
+	Params      string `json:"params,omitempty"`
 	Query       string `json:"query,omitempty"`
 	RacyCheckOK bool   `json:"racyCheckOk,omitempty"`
 	VideoID     string `json:"videoId,omitempty"`
@@ -96,26 +101,41 @@ func (f Format) Extension() string {
 
 func NewFormatRequest(videoID string) *FormatRequest {
 	var req FormatRequest
-	req.ContentCheckOK = true
+
 	req.Context.Client.Name = "ANDROID"
-	req.Context.Client.Version = android_version
+	req.Context.Client.Version = version
+	req.Context.Client.HL = "en"
+	req.Context.Client.GL = "US"
+	req.Context.Client.TimeZone = "UTC"
+	req.Context.Client.AndroidSDKVersion = android_version
+	req.Context.Client.UserAgent = userAgent
+
+	req.ContentCheckOK = true
 	req.RacyCheckOK = true
 	req.VideoID = videoID
+	req.Params = playerParams
+	req.PlaybackContext.ContentPlaybackContext.HTML5Preference = "HTML5_PREF_WANTS"
 	return &req
 }
 
-func GetFormats(videoID string, token *Token) (*[]Format, error) {
+func GetFormats(videoID string) (*[]Format, error) {
 	data := NewFormatRequest(videoID)
 	body, err := json.MarshalIndent(data, "", " ")
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", origin+"/youtubei/v1/player", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", origin+"/youtubei/v1/player?key="+api_key, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("X-Goog-API-Key", api_key)
+	req.Header.Set("X-Youtube-Client-Name", "3")
+	req.Header.Set("X-Youtube-Client-Version", version)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Origin", "https://youtube.com")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
 
 	resp, err := client.Do(req)
 	if err != nil {

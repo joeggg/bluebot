@@ -106,6 +106,8 @@ func handleEvent(session *discordgo.Session, msg *discordgo.MessageCreate, event
 Run a music player for a voice channel, from start to finish
 */
 func runPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceChannelID string, terms []string) error {
+	defer session.ChannelMessageSend(msg.ChannelID, "Stopping playing")
+	defer log.Printf("Removing subscription for user %s", msg.Author.Username)
 	// Make subscription object
 	sub, err := NewSubscription()
 	if err != nil {
@@ -128,16 +130,6 @@ func runPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go sub.ManageDownloads(ctx)
-	// Wait for 1 track at least downloaded
-	start := time.Now()
-	for len(sub.Tracks) == 0 {
-		time.Sleep(500 * time.Millisecond)
-		if time.Since(start) > 60*time.Second {
-			// Nothing was added
-			log.Printf("Removing subscription for user %s", msg.Author.Username)
-			return nil
-		}
-	}
 	// Join voice channel and start websocket audio communication
 	vc, err := session.ChannelVoiceJoin(msg.GuildID, voiceChannelID, false, true)
 	if err != nil {
@@ -146,16 +138,30 @@ func runPlayer(session *discordgo.Session, msg *discordgo.MessageCreate, voiceCh
 	defer vc.Disconnect()
 	// Any error handling past here must close the voice channel connection
 	vc.Speaking(true)
+	defer vc.Speaking(false)
 	log.Printf("Starting playing for user %s", msg.Author.Username)
-	err = sub.ManagePlayback(session, msg.ChannelID, vc)
-	if err != nil {
-		return err
-	}
+	go sub.ManagePlayback(session, msg.ChannelID, vc, ctx, cancel)
 
-	vc.Speaking(false)
-	session.ChannelMessageSend(msg.ChannelID, "Stopping playing")
-	log.Printf("Removing subscription for user %s", msg.Author.Username)
-	return nil
+	start := time.Now()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+
+		default:
+			time.Sleep(2 * time.Second)
+			// Wait for 1 track at least downloaded
+			if len(sub.QueueView) == 0 && time.Since(start) > 60*time.Second {
+				// Nothing was added
+				log.Printf("No new tracks for a while for user %s", msg.Author.Username)
+				return nil
+			}
+			if time.Since(start) > 12*time.Hour {
+				return nil
+			}
+		}
+	}
 }
 
 /*
