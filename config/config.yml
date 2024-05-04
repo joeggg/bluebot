@@ -3,6 +3,7 @@ CivListPath: /var/lib/bluebot/civ_list.csv
 CivSelections: 3
 GoogleKeyPath: /etc/bluebot/google_token.json
 DiscordTokenPath: /etc/bluebot/token.txt
+PorcupineTokenPath: /etc/bluebot/porcupine_token.txt 
 ImageFontPath: /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
 ImagePath: /var/lib/bluebot/images 
 SelfImagePath: /var/lib/bluebot/self_images 

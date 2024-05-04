@@ -27,6 +27,7 @@ var commands = map[string]util.HandlerFunc{
 	"chat":       command.HandleChat,
 	"saychat":    command.HandleSayChat,
 	"reset-chat": command.HandleResetChat,
+	"listen":     command.HandleListen,
 }
 
 func AddImageCommands() {
@@ -105,6 +106,7 @@ func main() {
 		log.Fatalf("Failed to create discord client: %s", err)
 	}
 
+	discord.Identify.Intents = discordgo.IntentsAllWithoutPrivileged
 	err = discord.Open()
 	if err != nil {
 		log.Fatalf("Failed to open connection to Discord: %s", err)

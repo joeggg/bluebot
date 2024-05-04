@@ -247,8 +247,6 @@ func (sub *Subscription) ManageDownloads(ctx context.Context) {
 			log.Println("Closing file download manager")
 			return
 
-		default:
-			time.Sleep(500 * time.Millisecond)
 		}
 	}
 }
@@ -359,8 +357,6 @@ func (sub *Subscription) ManagePlayback(session *discordgo.Session, chID string,
 		case <-ctx.Done():
 			return
 
-		default:
-			time.Sleep(500 * time.Millisecond)
 		}
 	}
 }
@@ -370,16 +366,12 @@ Wait for an event through the channel to end the pause.
 Returns true if we need to stop rather than just resume
 */
 func WaitForResume(ch chan string) bool {
-	for {
-		select {
-		case event := <-ch:
-			if event == "resume" {
-				return false
-			} else if event == "stop" {
-				return true
-			}
-		default:
-			time.Sleep(time.Millisecond * 300)
+	for event := range ch {
+		if event == "resume" {
+			return false
+		} else if event == "stop" {
+			return true
 		}
 	}
+	return false
 }

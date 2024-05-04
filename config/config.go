@@ -15,6 +15,8 @@ var Cfg = &Config{}
 
 var DiscordToken string
 
+var PorcupineToken string
+
 var Phrases = make(map[string][]string, 0)
 
 var VoicePresets = make(map[string]*VoicePreset, 0)
@@ -22,18 +24,19 @@ var VoicePresets = make(map[string]*VoicePreset, 0)
 var ImageSettings = make(map[string]*ImageSetting, 0)
 
 type Config struct {
-	AudioPath         string `yaml:"AudioPath"`
-	CivListPath       string `yaml:"CivListPath"`
-	CivSelections     int    `yaml:"CivSelections"`
-	GoogleKeyPath     string `yaml:"GoogleKeyPath"`
-	DiscordTokenPath  string `yaml:"DiscordTokenPath"`
-	ImageFontPath     string `yaml:"ImageFontPath"`
-	ImagePath         string `yaml:"ImagePath"`
-	SelfImagePath     string `yaml:"SelfImagePath"`
-	ImageSettingsPath string `yaml:"ImageSettingsPath"`
-	LogFilePath       string `yaml:"LogFilePath"`
-	SettingsDurationS int    `yaml:"SettingsDurationS"`
-	VoicePresetsPath  string `yaml:"VoicePresetsPath"`
+	AudioPath          string `yaml:"AudioPath"`
+	CivListPath        string `yaml:"CivListPath"`
+	CivSelections      int    `yaml:"CivSelections"`
+	GoogleKeyPath      string `yaml:"GoogleKeyPath"`
+	DiscordTokenPath   string `yaml:"DiscordTokenPath"`
+	PorcupineTokenPath string `yaml:"PorcupineTokenPath"`
+	ImageFontPath      string `yaml:"ImageFontPath"`
+	ImagePath          string `yaml:"ImagePath"`
+	SelfImagePath      string `yaml:"SelfImagePath"`
+	ImageSettingsPath  string `yaml:"ImageSettingsPath"`
+	LogFilePath        string `yaml:"LogFilePath"`
+	SettingsDurationS  int    `yaml:"SettingsDurationS"`
+	VoicePresetsPath   string `yaml:"VoicePresetsPath"`
 }
 
 type ImageSetting struct {
@@ -61,7 +64,9 @@ func LoadConfig() error {
 
 	if err = decoder.Decode(Cfg); err != nil {
 		return err
-	} else if DiscordToken, err = ReadDiscordToken(); err != nil {
+	} else if DiscordToken, err = ReadStringFromFile(Cfg.DiscordTokenPath); err != nil {
+		return err
+	} else if PorcupineToken, err = ReadStringFromFile(Cfg.PorcupineTokenPath); err != nil {
 		return err
 	} else if err = loadVoicePresets(); err != nil {
 		return err
@@ -137,8 +142,8 @@ func GetPhrase(category string) string {
 }
 
 // Read the token as a string from file
-func ReadDiscordToken() (string, error) {
-	token, err := os.ReadFile(Cfg.DiscordTokenPath)
+func ReadStringFromFile(filename string) (string, error) {
+	token, err := os.ReadFile(filename)
 	if err != nil {
 		return "", err
 	}

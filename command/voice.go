@@ -58,7 +58,7 @@ func greetUser(session *discordgo.Session, msg *discordgo.VoiceStateUpdate, user
 	} else {
 		text = phrase
 	}
-	err := generateVoice(text)
+	err := generateVoice(text, VoiceSelection)
 	if err != nil {
 		return err
 	}

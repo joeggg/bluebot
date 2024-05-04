@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -24,7 +25,7 @@ var (
 	Channels       int    = 1
 	SampleRate     int    = 48000
 	BitRate        int    = 64 * 1000
-	VoiceSelection string = "default"
+	VoiceSelection string = "bluebot"
 )
 
 /*
@@ -60,7 +61,11 @@ func HandleTell(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 	}
 	defer vc.Disconnect()
 
-	err = generateVoice(strings.Join(args, " "))
+	return playText(vc, strings.Join(args, " "), VoiceSelection)
+}
+
+func playText(vc *discordgo.VoiceConnection, text string, personality string) error {
+	err := generateVoice(text, personality)
 	if err != nil {
 		return err
 	}
@@ -76,14 +81,17 @@ func HandleTell(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 	return nil
 }
 
-func generateVoice(message string) error {
+func generateVoice(message string, personality string) error {
 	ctx := context.Background()
 	tts, err := texttospeech.NewService(ctx, option.WithCredentialsFile(config.Cfg.GoogleKeyPath))
 	if err != nil {
 		return err
 	}
 
-	preset := config.VoicePresets[VoiceSelection]
+	preset, ok := config.VoicePresets[personality]
+	if !ok {
+		return errors.New("personality given does not exist")
+	}
 	// Request for voice clip data from Google
 	req := &texttospeech.SynthesizeSpeechRequest{
 		Input: &texttospeech.SynthesisInput{
