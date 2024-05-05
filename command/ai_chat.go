@@ -119,7 +119,7 @@ func listenForWake(vc *discordgo.VoiceConnection) error {
 		return err
 	}
 
-	c := make(chan []byte)
+	pcm_chan := make(chan []int16)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -127,42 +127,45 @@ func listenForWake(vc *discordgo.VoiceConnection) error {
 		for {
 			select {
 			case packet := <-vc.OpusRecv:
-				c <- packet.Opus
+				pcm, err := decoder.Decode(packet.Opus, FrameSize, false)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				// Downsample to 16K
+				var data []int16
+				for i, sample := range pcm {
+					if i%3 == 0 {
+						data = append(data, sample)
+					}
+				}
+				pcm_chan <- data
 			case <-ctx.Done():
 				return
 			}
 		}
 	}()
 
-	// respond(vc, decoder, c)
-	// return nil
-	//
 	buffer := make([]int16, 0)
+	input_len := 320
+	output_len := 512
 	for {
 		select {
-		case packet := <-c:
-			results, err := decoder.Decode(packet, FrameSize, false)
-			if err != nil {
-				log.Println(err)
-			}
-			var data []int16
-			// Need to downsample to 16kHz
-			for i, sample := range results {
-				if i%3 == 0 {
-					data = append(data, sample)
-				}
-			}
+		case pcm := <-pcm_chan:
+			// Convert to 512 length buffer
+			amount_needed := output_len - len(buffer)
+			// Use at a maximum the length of the input data
+			idx_unil := int16(math.Min(float64(amount_needed), float64(input_len)))
+			buffer = append(buffer, pcm[:idx_unil]...)
 
-			space := 512 - len(buffer)
-			idx_unil := math.Min(float64(space), 320)
-			buffer = append(buffer, data[:int16(idx_unil)]...)
-
-			if len(buffer) != 512 {
+			// Not filling the buffer means we must have used all the data
+			if len(buffer) != output_len {
 				continue
 			}
 
 			keywordIndex, err := p.Process(buffer)
-			buffer = data[space:]
+			// Put remaining data into next buffer
+			buffer = pcm[amount_needed:]
 
 			if err != nil {
 				log.Println(err)
@@ -181,9 +184,19 @@ func listenForWake(vc *discordgo.VoiceConnection) error {
 
 			if err = playText(vc, "hey", personality); err != nil {
 				log.Println(err)
-			} else if err = respond(vc, decoder, c, personality); err != nil {
-				log.Println(err)
+				continue
 			}
+			transcript, err := listenForAudio(pcm_chan)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			response, err := getAiText([]string{transcript}, vc.ChannelID, personality)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			go playText(vc, response, personality)
 
 		case <-time.After(time.Minute):
 			log.Println("Exit listen due to inactivity")
@@ -193,43 +206,28 @@ func listenForWake(vc *discordgo.VoiceConnection) error {
 	}
 }
 
-func respond(vc *discordgo.VoiceConnection, decoder *gopus.Decoder, c chan []byte, personality string) error {
+func listenForAudio(pcm_chan chan []int16) (string, error) {
 	l := leopard.NewLeopard(config.PorcupineToken)
 	err := l.Init()
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer l.Delete()
 	var data []int16
 
 	for {
 		select {
-		case packet := <-c:
-			pcm, err := decoder.Decode(packet, FrameSize, false)
-			if err != nil {
-				return err
-			}
-			// Downsample to 16K
-			for i, sample := range pcm {
-				if i%3 == 0 {
-					data = append(data, sample)
-				}
-			}
+		case pcm := <-pcm_chan:
+			data = append(data, pcm...)
 
 		case <-time.After(time.Second):
 			transcript, _, err := l.Process(data)
 			if err != nil {
-				return err
+				return "", err
 			}
 
 			log.Printf(transcript)
-
-			response, err := getAiText([]string{transcript}, vc.ChannelID, personality)
-			if err != nil {
-				return err
-			}
-			return playText(vc, response, personality)
+			return transcript, nil
 		}
 	}
-
 }
