@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bluebot/command/core"
 	"bluebot/config"
 	"fmt"
 	"strings"
@@ -58,24 +59,10 @@ func greetUser(session *discordgo.Session, msg *discordgo.VoiceStateUpdate, user
 	} else {
 		text = phrase
 	}
-	err := generateVoice(text, VoiceSelection)
+
+	conn, err := core.GetActiveConnection(session, msg.GuildID, msg.ChannelID, "")
 	if err != nil {
 		return err
 	}
-
-	// Join channel
-	vc, err := session.ChannelVoiceJoin(msg.GuildID, msg.ChannelID, false, true)
-	if err != nil {
-		return err
-	}
-	defer vc.Disconnect()
-	vc.Speaking(true)
-	defer vc.Speaking(false)
-
-	err = playMP3(vc)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return conn.SendEvent("greeter", text, msg.ChannelID)
 }

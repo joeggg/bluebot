@@ -51,8 +51,8 @@ func NewDefaultSetting() *Setting {
 }
 
 /*
-	Generate a random selection of civs for provided or previously saved players within saved
-	or default min/max tiers
+Generate a random selection of civs for provided or previously saved players within saved
+or default min/max tiers
 */
 func generateCivs(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
 	// Check if settings exist and create new if not
@@ -110,7 +110,7 @@ func generateCivs(session *discordgo.Session, msg *discordgo.MessageCreate, args
 }
 
 /*
-	Read civ list from CSV
+Read civ list from CSV
 */
 func readCivList() ([][]string, error) {
 	file, err := os.Open(config.Cfg.CivListPath)
@@ -126,7 +126,7 @@ func readCivList() ([][]string, error) {
 }
 
 /*
-	Set the tiers for this text channel
+Set the tiers for this text channel
 */
 func setTiers(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
 	tiers := strings.Split(args[1], "-")
