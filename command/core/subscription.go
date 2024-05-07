@@ -48,14 +48,14 @@ type Subscription struct {
 	Downloads   chan *Track // To download queue
 	Tracks      chan *Track // Downloaded tracks queue
 	running     bool
-	pause       chan bool
-	Container   *Container
+	container   *Container
 }
 
 func NewSubscription() *Subscription {
 	return &Subscription{
-		Downloads: make(chan *Track, MaxQueueLen),
-		Tracks:    make(chan *Track, MaxQueueLen),
+		NextTrigger: make(chan bool),
+		Downloads:   make(chan *Track, MaxQueueLen),
+		Tracks:      make(chan *Track, MaxQueueLen),
 	}
 }
 
@@ -75,14 +75,14 @@ func (sub *Subscription) SendEvent(event string, args []string, msgChannelID str
 		return sub.listQueue(msgChannelID)
 	case "next":
 		// in case paused currently
-		sub.Container.TryResume()
+		sub.container.TryResume()
 		sub.NextTrigger <- true
 	case "pause":
-		sub.Container.TryPause()
+		sub.container.TryPause()
 	case "resume":
-		sub.Container.TryResume()
+		sub.container.TryResume()
 	case "stop":
-		sub.Container.cancel()
+		sub.container.cancel()
 	default:
 		return fmt.Errorf("Unknown event %s", event)
 	}
@@ -145,7 +145,7 @@ to queue if a URL otherwise first search youtube and use the first valid result
 */
 func (sub *Subscription) addToQueue(chID string, terms []string) {
 	if MaxQueueLen-len(sub.QueueView) < 1 {
-		sub.Container.session.ChannelMessageSend(chID, "Max queue length reached")
+		sub.container.session.ChannelMessageSend(chID, "Max queue length reached")
 		return
 	}
 
@@ -154,7 +154,7 @@ func (sub *Subscription) addToQueue(chID string, terms []string) {
 		// Not a URL so search youtube for a video/playlist
 		items, err := searchYT(strings.Join(terms, " "))
 		if err != nil {
-			sub.Container.session.ChannelMessageSend(chID, "YouTube search returned no results")
+			sub.container.session.ChannelMessageSend(chID, "YouTube search returned no results")
 			log.Println(err)
 			return
 		}
@@ -162,16 +162,16 @@ func (sub *Subscription) addToQueue(chID string, terms []string) {
 		for i := range items {
 			if items[i].Id.VideoId != "" {
 				track := &Track{items[i].Id.VideoId, "", items[i].Snippet.Title}
-				err = sub.addVideo(sub.Container.session, chID, track, true)
+				err = sub.addVideo(sub.container.session, chID, track, true)
 
 			} else if items[i].Id.PlaylistId != "" {
-				err = sub.addPlaylist(sub.Container.session, chID, items[i].Id.PlaylistId)
+				err = sub.addPlaylist(sub.container.session, chID, items[i].Id.PlaylistId)
 			}
 			if err == nil {
 				return
 			}
 		}
-		sub.Container.session.ChannelMessageSend(chID, "YouTube search returned no results")
+		sub.container.session.ChannelMessageSend(chID, "YouTube search returned no results")
 		log.Println(err)
 
 	} else {
@@ -180,13 +180,13 @@ func (sub *Subscription) addToQueue(chID string, terms []string) {
 		if !strings.Contains(URL, "list=") {
 			track, err := trackFromURL(URL)
 			if err == nil {
-				err = sub.addVideo(sub.Container.session, chID, track, true)
+				err = sub.addVideo(sub.container.session, chID, track, true)
 			}
 		} else {
-			err = sub.addPlaylist(sub.Container.session, chID, strings.Split(URL, "list=")[1])
+			err = sub.addPlaylist(sub.container.session, chID, strings.Split(URL, "list=")[1])
 		}
 		if err != nil {
-			sub.Container.session.ChannelMessageSend(chID, "Failed to find a download for "+URL)
+			sub.container.session.ChannelMessageSend(chID, "Failed to find a download for "+URL)
 			log.Println(err)
 		}
 	}
@@ -210,7 +210,7 @@ func (sub *Subscription) listQueue(msgChannelID string) error {
 	if numTracks > max {
 		output += fmt.Sprintf("...and %d more tracks", numTracks-max)
 	}
-	sub.Container.session.ChannelMessageSend(msgChannelID, output)
+	sub.container.session.ChannelMessageSend(msgChannelID, output)
 	return nil
 }
 

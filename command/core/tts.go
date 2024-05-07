@@ -27,7 +27,7 @@ var (
 )
 
 func PlayText(text string, personality string, container *Container) error {
-	filename := fmt.Sprintf("%s/%s/output.mp3", config.Cfg.AudioPath, container.vc.ChannelID)
+	filename := fmt.Sprintf("%s/%s_output.mp3", config.Cfg.AudioPath, container.vc.ChannelID)
 
 	err := generateVoice(text, personality, filename)
 	if err != nil {

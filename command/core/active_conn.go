@@ -123,21 +123,24 @@ func NewActiveConnection(
 	ctx, cancel := context.WithCancel(context.Background())
 	pauseReqs := make(chan bool)
 	resumeReqs := make(chan bool)
+	playingNotification := make(chan string)
 	return &ActiveConnection{
 		container: &Container{
-			session:        session,
-			vc:             vc,
-			mu:             &sync.Mutex{},
-			ctx:            ctx,
-			cancel:         cancel,
-			pauseRequests:  &pauseReqs,
-			resumeRequests: &resumeReqs,
+			session:             session,
+			vc:                  vc,
+			mu:                  &sync.Mutex{},
+			ctx:                 ctx,
+			cancel:              cancel,
+			pauseRequests:       &pauseReqs,
+			resumeRequests:      &resumeReqs,
+			playingNotification: &playingNotification,
 		},
 		apps: map[string]App{
 			"sub":     NewSubscription(),
 			"conv":    NewConversation(),
 			"greeter": NewGreeter(),
 		},
+		appContainers: make(map[string]*Container),
 	}
 }
 
@@ -200,14 +203,16 @@ func (conn *ActiveConnection) SendEventWithArgs(appName string, event string, ms
 	if !app.IsRunning() {
 		appCtx, appCancel := context.WithCancel(conn.container.ctx)
 		appContainer := &Container{
-			app_name:       appName,
-			session:        conn.container.session,
-			vc:             conn.container.vc,
-			mu:             conn.container.mu,
-			ctx:            appCtx,
-			cancel:         appCancel,
-			pauseRequests:  conn.container.pauseRequests,
-			resumeRequests: conn.container.resumeRequests,
+			app_name:            appName,
+			session:             conn.container.session,
+			vc:                  conn.container.vc,
+			mu:                  conn.container.mu,
+			ctx:                 appCtx,
+			cancel:              appCancel,
+			pauseRequests:       conn.container.pauseRequests,
+			resumeRequests:      conn.container.resumeRequests,
+			resumeRecveiver:     make(chan bool),
+			playingNotification: conn.container.playingNotification,
 		}
 		conn.insertAppContainer(appName, appContainer)
 		conn.wg.Add(1)
@@ -278,7 +283,7 @@ func (conn *ActiveConnection) run() {
 				container.TryResume()
 			}
 
-		case <-time.After(time.Second):
+		case <-time.After(500 * time.Millisecond):
 			// Shut down if no apps are running
 			if len(conn.appContainers) == 0 {
 				return
