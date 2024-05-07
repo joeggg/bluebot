@@ -59,14 +59,6 @@ func NewSubscription() *Subscription {
 	}
 }
 
-func (sub *Subscription) IsRunning() bool {
-	return sub.running
-}
-
-func (sub *Subscription) SetRunning(running bool) {
-	sub.running = running
-}
-
 func (sub *Subscription) SendEvent(event string, args []string, msgChannelID string) error {
 	switch event {
 	case "queue":

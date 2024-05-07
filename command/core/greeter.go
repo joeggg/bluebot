@@ -15,14 +15,6 @@ func NewGreeter() *Greeter {
 	return &Greeter{command: make(chan string)}
 }
 
-func (g *Greeter) IsRunning() bool {
-	return g.running
-}
-
-func (g *Greeter) SetRunning(running bool) {
-	g.running = running
-}
-
 func (g *Greeter) SendEvent(event string, args []string, channelID string) error {
 	g.command <- event
 	return nil

@@ -11,18 +11,12 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type Event string
-
 var activeConnections = make(map[string]*ActiveConnection)
 
 type App interface {
-	IsRunning() bool
-	SetRunning(bool)
 	SendEvent(event string, args []string, channelID string) error
 	Run(*Container, string) error
 }
-
-type handlerMap map[Event]App
 
 // Resources required by an app to run
 type Container struct {
@@ -59,7 +53,7 @@ func (c *Container) TryResume() {
 }
 
 /*
-Try resume any container's app with a timeout in case it's playing
+Try resume last running app with a timeout in case it's playing
 */
 func (c *Container) TryResumeLast() {
 	select {
@@ -185,78 +179,6 @@ func CloseActiveConnections() {
 	wg.Wait()
 }
 
-func (a *ActiveConnection) ShutDown() {
-	a.container.cancel()
-	a.wg.Wait()
-}
-
-func (conn *ActiveConnection) SendEvent(appName string, event string, msgChannelID string) error {
-	return conn.SendEventWithArgs(appName, event, msgChannelID, []string{})
-}
-
-func (conn *ActiveConnection) SendEventWithArgs(appName string, event string, msgChannelID string, args []string) error {
-	app, ok := conn.apps[appName]
-	if !ok {
-		return fmt.Errorf("Received command for unknown app: %s", appName)
-	}
-
-	if !app.IsRunning() {
-		appCtx, appCancel := context.WithCancel(conn.container.ctx)
-		appContainer := &Container{
-			app_name:            appName,
-			session:             conn.container.session,
-			vc:                  conn.container.vc,
-			mu:                  conn.container.mu,
-			ctx:                 appCtx,
-			cancel:              appCancel,
-			pauseRequests:       conn.container.pauseRequests,
-			resumeRequests:      conn.container.resumeRequests,
-			resumeRecveiver:     make(chan bool),
-			playingNotification: conn.container.playingNotification,
-		}
-		conn.insertAppContainer(appName, appContainer)
-		conn.wg.Add(1)
-
-		go func() {
-			log.Printf("Starting app %s for connection %s", appName, conn.container.vc.ChannelID)
-
-			defer conn.wg.Done()
-			app.SetRunning(true)
-			defer app.SetRunning(false)
-			defer conn.deleteAppContainer(appName)
-			// Run spans the 'lifetime' of the app
-			err := app.Run(appContainer, msgChannelID)
-			if err != nil {
-				log.Println(err)
-			}
-
-			log.Printf("Closed app %s for connection %s", appName, conn.container.vc.ChannelID)
-		}()
-
-	}
-	return app.SendEvent(event, args, msgChannelID)
-}
-
-func (conn *ActiveConnection) insertAppContainer(appName string, container *Container) {
-	conn.mu.Lock()
-	conn.appContainers[appName] = container
-	conn.mu.Unlock()
-}
-
-func (conn *ActiveConnection) deleteAppContainer(appName string) {
-	conn.mu.Lock()
-	delete(conn.appContainers, appName)
-	conn.mu.Unlock()
-}
-
-func (conn *ActiveConnection) getAppContainer(appName string) *Container {
-	container, ok := conn.appContainers[appName]
-	if ok && container != nil {
-		return container
-	}
-	return nil
-}
-
 func (conn *ActiveConnection) run() {
 	log.Printf("Starting new active connection for vc %s", conn.container.vc.ChannelID)
 	defer log.Printf("Closed active connection for vc %s", conn.container.vc.ChannelID)
@@ -290,6 +212,78 @@ func (conn *ActiveConnection) run() {
 			}
 		}
 	}
+}
+
+func (a *ActiveConnection) ShutDown() {
+	a.container.cancel()
+	a.wg.Wait()
+}
+
+func (conn *ActiveConnection) SendEvent(appName string, event string, msgChannelID string) error {
+	return conn.SendEventWithArgs(appName, event, msgChannelID, []string{})
+}
+
+func (conn *ActiveConnection) SendEventWithArgs(appName string, event string, msgChannelID string, args []string) error {
+	app, ok := conn.apps[appName]
+	if !ok {
+		return fmt.Errorf("Received command for unknown app: %s", appName)
+	}
+
+	if conn.getAppContainer(appName) == nil {
+		appCtx, appCancel := context.WithCancel(conn.container.ctx)
+		appContainer := &Container{
+			app_name:            appName,
+			session:             conn.container.session,
+			vc:                  conn.container.vc,
+			mu:                  conn.container.mu,
+			ctx:                 appCtx,
+			cancel:              appCancel,
+			pauseRequests:       conn.container.pauseRequests,
+			resumeRequests:      conn.container.resumeRequests,
+			resumeRecveiver:     make(chan bool),
+			playingNotification: conn.container.playingNotification,
+		}
+		conn.insertAppContainer(appName, appContainer)
+		conn.wg.Add(1)
+
+		go func() {
+			log.Printf("Starting app %s for connection %s", appName, conn.container.vc.ChannelID)
+
+			defer conn.wg.Done()
+			defer conn.deleteAppContainer(appName)
+			// Run spans the 'lifetime' of the app
+			err := app.Run(appContainer, msgChannelID)
+			if err != nil {
+				log.Println(err)
+			}
+
+			log.Printf("Closed app %s for connection %s", appName, conn.container.vc.ChannelID)
+		}()
+
+	}
+	return app.SendEvent(event, args, msgChannelID)
+}
+
+func (conn *ActiveConnection) insertAppContainer(appName string, container *Container) {
+	conn.mu.Lock()
+	conn.appContainers[appName] = container
+	conn.mu.Unlock()
+}
+
+func (conn *ActiveConnection) deleteAppContainer(appName string) {
+	conn.mu.Lock()
+	delete(conn.appContainers, appName)
+	conn.mu.Unlock()
+}
+
+func (conn *ActiveConnection) getAppContainer(appName string) *Container {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	container, ok := conn.appContainers[appName]
+	if ok && container != nil {
+		return container
+	}
+	return nil
 }
 
 /*

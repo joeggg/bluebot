@@ -45,14 +45,6 @@ func NewConversation() *Conversation {
 	return &Conversation{}
 }
 
-func (conv *Conversation) IsRunning() bool {
-	return conv.running
-}
-
-func (conv *Conversation) SetRunning(running bool) {
-	conv.running = running
-}
-
 func (conv *Conversation) SendEvent(event string, args []string, channelID string) error {
 	return nil
 }
