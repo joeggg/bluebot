@@ -101,6 +101,7 @@ func (sub *Subscription) Run(container *Container, channelID string) error {
 	}
 	sub.ID = id
 	sub.Folder = config.Cfg.AudioPath + "/" + id
+	sub.container = container
 	// Make folder for files
 	if err := os.Mkdir(sub.Folder, 0755); err != nil && !errors.Is(err, os.ErrExist) {
 		return err

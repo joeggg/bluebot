@@ -11,6 +11,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+const tryWaitTime = 100 * time.Millisecond
+
 var activeConnections = make(map[string]*ActiveConnection)
 
 type App interface {
@@ -38,7 +40,7 @@ Try pausing with a timeout in case nothing is playing
 func (c *Container) TryPause() {
 	select {
 	case *c.pauseRequests <- true:
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(tryWaitTime):
 	}
 }
 
@@ -48,7 +50,7 @@ Try resume this container's app with a timeout in case it's playing
 func (c *Container) TryResume() {
 	select {
 	case c.resumeRecveiver <- true:
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(tryWaitTime):
 	}
 }
 
@@ -58,7 +60,7 @@ Try resume last running app with a timeout in case it's playing
 func (c *Container) TryResumeLast() {
 	select {
 	case *c.resumeRequests <- true:
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(tryWaitTime):
 	}
 }
 
@@ -145,7 +147,7 @@ func GetActiveConnection(
 	session *discordgo.Session, guildID string, voiceChannelID string, authorID string,
 ) (*ActiveConnection, error) {
 	if voiceChannelID == "" {
-		voiceChannelID := getAuthorVoiceChannel(session, guildID, authorID)
+		voiceChannelID = getAuthorVoiceChannel(session, guildID, authorID)
 		if voiceChannelID == "" {
 			return nil, errors.New("User not in a voice channel")
 		}
@@ -155,7 +157,7 @@ func GetActiveConnection(
 		return conn, nil
 	}
 	// Join voice channel and start websocket audio communication
-	vc, err := session.ChannelVoiceJoin(guildID, voiceChannelID, false, true)
+	vc, err := session.ChannelVoiceJoin(guildID, voiceChannelID, false, false)
 	if err != nil {
 		return nil, err
 	}

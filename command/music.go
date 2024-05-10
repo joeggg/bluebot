@@ -3,6 +3,7 @@ package command
 import (
 	"bluebot/command/core"
 	"bluebot/util"
+	"log"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -25,7 +26,14 @@ func handleQueue(session *discordgo.Session, msg *discordgo.MessageCreate, args 
 		session.ChannelMessageSend(msg.ChannelID, "No URL or search text given")
 		return nil
 	}
-	return handleEvent("queue", session, msg)
+	conn, err := core.GetActiveConnection(session, msg.GuildID, "", msg.Author.ID)
+	if err != nil {
+		log.Fatalln(err)
+		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
+		return nil
+	}
+
+	return conn.SendEventWithArgs("sub", "queue", msg.ChannelID, args)
 }
 
 func handleList(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
@@ -51,6 +59,7 @@ func handleStop(session *discordgo.Session, msg *discordgo.MessageCreate, args [
 func handleEvent(event string, session *discordgo.Session, msg *discordgo.MessageCreate) error {
 	conn, err := core.GetActiveConnection(session, msg.GuildID, "", msg.Author.ID)
 	if err != nil {
+		log.Fatalln(err)
 		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
 		return nil
 	}

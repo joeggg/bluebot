@@ -4,6 +4,7 @@ import (
 	"bluebot/command/core"
 	"bluebot/config"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -62,6 +63,7 @@ func greetUser(session *discordgo.Session, msg *discordgo.VoiceStateUpdate, user
 
 	conn, err := core.GetActiveConnection(session, msg.GuildID, msg.ChannelID, "")
 	if err != nil {
+		log.Fatalln(err)
 		return err
 	}
 	return conn.SendEvent("greeter", text, msg.ChannelID)

@@ -3,6 +3,7 @@ package command
 import (
 	"bluebot/command/core"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -58,6 +59,7 @@ func HandleResetChat(session *discordgo.Session, msg *discordgo.MessageCreate, a
 func HandleListen(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
 	conn, err := core.GetActiveConnection(session, msg.GuildID, "", msg.Author.ID)
 	if err != nil {
+		log.Fatalln(err)
 		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
 		return nil
 	}

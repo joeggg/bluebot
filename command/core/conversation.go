@@ -37,8 +37,9 @@ func GetAiText(sck *WorkerSocket, text string, uid string, personality string) (
 }
 
 type Conversation struct {
-	running bool
-	pause   chan bool
+	running   bool
+	pause     chan bool
+	container *Container
 }
 
 func NewConversation() *Conversation {
@@ -46,10 +47,15 @@ func NewConversation() *Conversation {
 }
 
 func (conv *Conversation) SendEvent(event string, args []string, channelID string) error {
+	// Slighty dodgy as assumes the app won't have started yet if this is run on startup
+	if conv.container != nil {
+		conv.container.cancel()
+	}
 	return nil
 }
 
 func (conv *Conversation) Run(container *Container, channelID string) error {
+	conv.container = container
 	// Wake word detector
 	p := porcupine.Porcupine{
 		AccessKey: config.PorcupineToken,
