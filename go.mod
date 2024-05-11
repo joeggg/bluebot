@@ -30,6 +30,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/s2a-go v0.1.7 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
+	github.com/mattetti/audio v0.0.0-20240411020228-c5379f9b5b61 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.51.0 // indirect
 	go.opentelemetry.io/otel v1.26.0 // indirect

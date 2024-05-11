@@ -40,23 +40,28 @@ type Track struct {
 
 // Each instance of the bot playing in a voice channel is a "Subscription"
 type Subscription struct {
-	ID          string      // Unique ID
-	Folder      string      // Base folder + ID
-	QueueView   []*Track    // All videos in queue, downloaded or not, needed for displaying queue
+	id          string      // Unique ID
+	folder      string      // Base folder + ID
+	queueView   []*Track    // All videos in queue, downloaded or not, needed for displaying queue
 	mu          sync.Mutex  // To prevent race condition on queue append
-	NextTrigger chan bool   // Event queue (user actions such as pause, next etc.)
-	Downloads   chan *Track // To download queue
-	Tracks      chan *Track // Downloaded tracks queue
+	nextTrigger chan bool   // Event queue (user actions such as pause, next etc.)
+	downloads   chan *Track // To download queue
+	tracks      chan *Track // Downloaded tracks queue
 	running     bool
 	container   *Container
 }
 
-func NewSubscription() *Subscription {
+func NewSubscription(container *Container) VoiceApp {
 	return &Subscription{
-		NextTrigger: make(chan bool),
-		Downloads:   make(chan *Track, MaxQueueLen),
-		Tracks:      make(chan *Track, MaxQueueLen),
+		container:   container,
+		nextTrigger: make(chan bool),
+		downloads:   make(chan *Track, MaxQueueLen),
+		tracks:      make(chan *Track, MaxQueueLen),
 	}
+}
+
+func (sub *Subscription) Container() *Container {
+	return sub.container
 }
 
 func (sub *Subscription) SendEvent(event string, args []string, msgChannelID string) error {
@@ -68,7 +73,7 @@ func (sub *Subscription) SendEvent(event string, args []string, msgChannelID str
 	case "next":
 		// in case paused currently
 		sub.container.TryResume()
-		sub.NextTrigger <- true
+		sub.nextTrigger <- true
 	case "pause":
 		sub.container.TryPause()
 	case "resume":
@@ -81,10 +86,10 @@ func (sub *Subscription) SendEvent(event string, args []string, msgChannelID str
 	return nil
 }
 
-func (sub *Subscription) Run(container *Container, channelID string) error {
-	log.Printf("Created subscription %s for user %s", sub.ID, container.vc.ChannelID)
-	defer container.session.ChannelMessageSend(channelID, "Stopping playing")
-	defer log.Printf("Removing subscription for user %s", container.vc.ChannelID)
+func (sub *Subscription) Run(channelID string) error {
+	log.Printf("Created subscription %s for user %s", sub.id, sub.container.vc.ChannelID)
+	defer sub.container.session.ChannelMessageSend(channelID, "Stopping playing")
+	defer log.Printf("Removing subscription for user %s", sub.container.vc.ChannelID)
 	// Get a random hash as the ID (that isn't in use)
 	var id string
 	for {
@@ -99,28 +104,27 @@ func (sub *Subscription) Run(container *Container, channelID string) error {
 			break
 		}
 	}
-	sub.ID = id
-	sub.Folder = config.Cfg.AudioPath + "/" + id
-	sub.container = container
+	sub.id = id
+	sub.folder = config.Cfg.AudioPath + "/" + id
 	// Make folder for files
-	if err := os.Mkdir(sub.Folder, 0755); err != nil && !errors.Is(err, os.ErrExist) {
+	if err := os.Mkdir(sub.folder, 0755); err != nil && !errors.Is(err, os.ErrExist) {
 		return err
 	}
-	defer os.RemoveAll(sub.Folder)
+	defer os.RemoveAll(sub.folder)
 
-	go sub.ManageDownloads(container)
-	go sub.ManagePlayback(channelID, container)
-	defer container.cancel()
+	go sub.ManageDownloads()
+	go sub.ManagePlayback(channelID)
+	defer sub.container.cancel()
 
 	start := time.Now()
 	for {
 		select {
-		case <-container.ctx.Done():
+		case <-sub.container.ctx.Done():
 			return nil
 
 		case <-time.After(2 * time.Second):
 			// Wait for 1 track at least downloaded
-			if len(sub.QueueView) == 0 && time.Since(start) > 60*time.Second {
+			if len(sub.queueView) == 0 && time.Since(start) > 60*time.Second {
 				// Nothing was added
 				log.Printf("No new tracks for a while for channel %s", channelID)
 				return nil
@@ -137,7 +141,7 @@ Add a video or playlist to the queue and downloads channel. Directly get the met
 to queue if a URL otherwise first search youtube and use the first valid result
 */
 func (sub *Subscription) addToQueue(chID string, terms []string) {
-	if MaxQueueLen-len(sub.QueueView) < 1 {
+	if MaxQueueLen-len(sub.queueView) < 1 {
 		sub.container.session.ChannelMessageSend(chID, "Max queue length reached")
 		return
 	}
@@ -187,13 +191,13 @@ func (sub *Subscription) addToQueue(chID string, terms []string) {
 
 func (sub *Subscription) listQueue(msgChannelID string) error {
 	output := "\\~~\\~~\\~~\\~~\\~~\\~~ Current queue \\~~\\~~\\~~\\~~\\~~\\~~\n"
-	numTracks := len(sub.QueueView)
+	numTracks := len(sub.queueView)
 	max := MaxListDisplay
 	if numTracks < max {
 		max = numTracks
 	}
 	for i := 0; i < max; i++ {
-		output += fmt.Sprintf("%d - %s", i+1, sub.QueueView[i].Title)
+		output += fmt.Sprintf("%d - %s", i+1, sub.queueView[i].Title)
 		if i == 0 {
 			output += " <--\n"
 		} else {
@@ -254,7 +258,7 @@ func (sub *Subscription) addPlaylist(session *discordgo.Session, chID string, ID
 		return err
 	}
 	parts := []string{"snippet"}
-	maxResults := int64(MaxQueueLen - len(sub.QueueView))
+	maxResults := int64(MaxQueueLen - len(sub.queueView))
 	results, err := service.PlaylistItems.List(parts).PlaylistId(ID).MaxResults(maxResults).Do()
 	if err != nil {
 		return err
@@ -286,9 +290,9 @@ queue & downloads channel
 func (sub *Subscription) addVideo(
 	session *discordgo.Session, chID string, track *Track, isShowingMessage bool,
 ) error {
-	sub.Downloads <- track
+	sub.downloads <- track
 	sub.mu.Lock()
-	sub.QueueView = append(sub.QueueView, track)
+	sub.queueView = append(sub.queueView, track)
 	sub.mu.Unlock()
 	if isShowingMessage {
 		session.ChannelMessageSend(chID, fmt.Sprintf("--> Added track [ %s ] to the queue", track.Title))
@@ -303,27 +307,27 @@ by the queue manager
 Puts the Track object containing the filename on the tracks channel to be picked up by the
 playback manager
 */
-func (sub *Subscription) ManageDownloads(container *Container) {
+func (sub *Subscription) ManageDownloads() {
 	for {
 		// // Only download 2 tracks in advance
 		// for len(sub.Tracks) > 1 {
 		// 	time.Sleep(time.Second)
 		// }
 		select {
-		case <-container.ctx.Done():
+		case <-sub.container.ctx.Done():
 			log.Println("Closing file download manager")
 			return
 
 		// Get video metadata from queue and download the audio file
-		case track := <-sub.Downloads:
-			err := downloadAudio(sub.Folder, track)
+		case track := <-sub.downloads:
+			err := downloadAudio(sub.folder, track)
 			if err != nil {
 				log.Printf("Failed to download file for %s", track.ID)
 				log.Println(err)
 				sub.removeQueueItem(track)
 				continue
 			}
-			sub.Tracks <- track
+			sub.tracks <- track
 
 		}
 	}
@@ -353,10 +357,10 @@ func downloadAudio(folder string, track *Track) error {
 
 func (sub *Subscription) removeQueueItem(track *Track) {
 	// Remove element from queue view
-	for i, item := range sub.QueueView {
+	for i, item := range sub.queueView {
 		if item.ID == track.ID {
 			sub.mu.Lock()
-			sub.QueueView = append(sub.QueueView[:i], sub.QueueView[i+1:]...)
+			sub.queueView = append(sub.queueView[:i], sub.queueView[i+1:]...)
 			sub.mu.Unlock()
 			break
 		}
@@ -372,22 +376,22 @@ the opus packets, deleting each track's file after it's finished
 Waits for a bit when the track channel is empty before closing in case download is slow.
 There's a long timeout on the parsed WebM channel for a similar reason
 */
-func (sub *Subscription) ManagePlayback(chID string, container *Container) {
-	log.Printf("Starting playing for user %s", container.vc.UserID)
+func (sub *Subscription) ManagePlayback(chID string) {
+	log.Printf("Starting playing for user %s", sub.container.vc.UserID)
 	for {
 		// Iterate over the Tracks channel
 		select {
-		case <-container.ctx.Done():
+		case <-sub.container.ctx.Done():
 			return
 
-		case track := <-sub.Tracks:
+		case track := <-sub.tracks:
 
 			file, err := os.Open(track.Filename)
 			if err != nil {
 				log.Printf(
-					"An error occurred opening [ %s ] for subscription %s: %s", track.Title, sub.ID, err,
+					"An error occurred opening [ %s ] for subscription %s: %s", track.Title, sub.id, err,
 				)
-				container.session.ChannelMessageSend(
+				sub.container.session.ChannelMessageSend(
 					chID, fmt.Sprintf("Failed to play [ %s ], skipping", track.Title),
 				)
 				continue
@@ -398,47 +402,47 @@ func (sub *Subscription) ManagePlayback(chID string, container *Container) {
 			wr, err := webm.Parse(file, &w)
 			if err != nil {
 				log.Printf(
-					"An error occurred parsing [ %s ] for subscription %s: %s", track.Title, sub.ID, err,
+					"An error occurred parsing [ %s ] for subscription %s: %s", track.Title, sub.id, err,
 				)
-				container.session.ChannelMessageSend(
+				sub.container.session.ChannelMessageSend(
 					chID, fmt.Sprintf("Failed to play [ %s ], skipping", track.Title),
 				)
 			}
-			container.session.ChannelMessageSend(
+			sub.container.session.ChannelMessageSend(
 				chID, fmt.Sprintf("--> Playing track [ %s ]", track.Title),
 			)
-			log.Printf("Playing track [ %s ] for subscription %s", track.Title, sub.ID)
+			log.Printf("Playing track [ %s ] for subscription %s", track.Title, sub.id)
 			// Read opus data from parsed webm and pass into sending channel
-			container.AcquirePlayLock()
+			sub.container.AcquirePlayLock()
 			playing := true
 			for playing {
 				select {
-				case <-container.ctx.Done():
+				case <-sub.container.ctx.Done():
 					return
 				// Check for play requests
-				case <-*container.pauseRequests:
-					container.WaitForResume()
+				case <-*sub.container.pauseRequests:
+					sub.container.WaitForResume()
 					// Next track
-				case <-sub.NextTrigger:
+				case <-sub.nextTrigger:
 					playing = false
 				// Send the opus data
 				case packet, ok := <-wr.Chan:
 					if !ok {
 						playing = false
 					}
-					container.vc.OpusSend <- packet.Data
+					sub.container.vc.OpusSend <- packet.Data
 				// Move on after 2 seconds of no packets
 				case <-time.After(2 * time.Second):
-					log.Printf("Failed to read any packets for subscription %s", sub.ID)
+					log.Printf("Failed to read any packets for subscription %s", sub.id)
 					playing = false
 				}
 			}
-			container.ReleasePlayLock()
+			sub.container.ReleasePlayLock()
 			// Cleanup file and queue list
 			file.Close()
 			os.Remove(track.Filename)
 			sub.mu.Lock()
-			sub.QueueView = sub.QueueView[1:]
+			sub.queueView = sub.queueView[1:]
 			sub.mu.Unlock()
 
 		}

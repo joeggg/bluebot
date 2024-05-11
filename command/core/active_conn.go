@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -13,25 +12,20 @@ import (
 
 const tryWaitTime = 100 * time.Millisecond
 
-var activeConnections = make(map[string]*ActiveConnection)
-
-type App interface {
-	SendEvent(event string, args []string, channelID string) error
-	Run(*Container, string) error
-}
-
 // Resources required by an app to run
 type Container struct {
-	app_name            string
+	appName appType
+	// Shared between all a single conn's containers by ref
 	session             *discordgo.Session
 	vc                  *discordgo.VoiceConnection
-	mu                  *sync.Mutex
-	ctx                 context.Context
-	cancel              context.CancelFunc
-	playingNotification *chan string
-	pauseRequests       *chan bool // for requesting what's playing to stop directly
-	resumeRequests      *chan bool // for requesting the conn to pause everything
-	resumeRecveiver     chan bool  // for receiving a resume signal from the conn
+	mu                  *sync.Mutex   // output lock
+	playingNotification *chan appType // to notify the conn we were the last playing
+	pauseRequests       *chan bool    // for requesting what's playing to stop directly
+	resumeRequests      *chan bool    // for requesting the conn to resume what was last playing
+	// Unique per app container
+	ctx             context.Context
+	cancel          context.CancelFunc
+	resumeRecveiver chan bool // for receiving a resume signal from the conn
 }
 
 /*
@@ -86,10 +80,10 @@ func (c *Container) ReleasePlayLock() {
 Run this on receiving a pause request, will relinquish control unil a resume request is received
 */
 func (c *Container) WaitForResume() {
-	// Set to speaking as will be unset when the app we're waiting for finishes
-	*c.playingNotification <- c.app_name
+	*c.playingNotification <- c.appName
 	c.mu.Unlock()
 	c.vc.Speaking(false)
+	// Set to speaking as will be unset when the app we're waiting for finishes
 	defer c.vc.Speaking(true)
 	// Lock even if done so release of PlayLock still works
 	defer c.mu.Lock()
@@ -103,15 +97,36 @@ func (c *Container) WaitForResume() {
 	}
 }
 
+type appType = int
+
+const (
+	MusicApp appType = iota
+	AiApp
+	GreeterApp
+)
+
+// Respresents anything running requiring a voice connection
+type VoiceApp interface {
+	Container() *Container
+	SendEvent(event string, args []string, channelID string) error
+	Run(string) error
+}
+
+type VoiceAppConstructor = func(*Container) VoiceApp
+
+// A connection to a given voice channel, managing an arbitrary number of apps running at once
+// Shuts down and clears its memory when all apps have finished
 type ActiveConnection struct {
 	container *Container
 	mu        sync.Mutex
 	wg        sync.WaitGroup
 	// Apps
-	apps          map[string]App
-	appContainers map[string]*Container
-	lastPlaying   string
+	appConstructors map[appType]VoiceAppConstructor
+	apps            map[appType]VoiceApp
+	lastPlaying     appType
 }
+
+var activeConnections = make(map[string]*ActiveConnection)
 
 func NewActiveConnection(
 	session *discordgo.Session, vc *discordgo.VoiceConnection,
@@ -119,7 +134,8 @@ func NewActiveConnection(
 	ctx, cancel := context.WithCancel(context.Background())
 	pauseReqs := make(chan bool)
 	resumeReqs := make(chan bool)
-	playingNotification := make(chan string)
+	playingNotification := make(chan appType)
+
 	return &ActiveConnection{
 		container: &Container{
 			session:             session,
@@ -131,28 +147,41 @@ func NewActiveConnection(
 			resumeRequests:      &resumeReqs,
 			playingNotification: &playingNotification,
 		},
-		apps: map[string]App{
-			"sub":     NewSubscription(),
-			"conv":    NewConversation(),
-			"greeter": NewGreeter(),
+		appConstructors: map[appType]VoiceAppConstructor{
+			MusicApp:   NewSubscription,
+			AiApp:      NewConversation,
+			GreeterApp: NewGreeter,
 		},
-		appContainers: make(map[string]*Container),
+		apps: make(map[appType]VoiceApp),
 	}
+}
+
+func GetActiveConnectionByAuthor(
+	session *discordgo.Session, guildID string, authorID string,
+) (*ActiveConnection, error) {
+	// Find sender's voice channel
+	voiceChannelID := ""
+	guild, err := session.State.Guild(guildID)
+	if err != nil {
+		return nil, err
+	}
+	for _, vs := range guild.VoiceStates {
+		if vs.UserID == authorID {
+			voiceChannelID = vs.ChannelID
+		}
+	}
+	if voiceChannelID == "" {
+		return nil, errors.New("User not in a voice channel")
+	}
+	return GetActiveConnection(session, guildID, voiceChannelID)
 }
 
 /*
 Start the active voice connection, returns an error if unable to connect to the voice channel
 */
 func GetActiveConnection(
-	session *discordgo.Session, guildID string, voiceChannelID string, authorID string,
+	session *discordgo.Session, guildID string, voiceChannelID string,
 ) (*ActiveConnection, error) {
-	if voiceChannelID == "" {
-		voiceChannelID = getAuthorVoiceChannel(session, guildID, authorID)
-		if voiceChannelID == "" {
-			return nil, errors.New("User not in a voice channel")
-		}
-	}
-
 	if conn, ok := activeConnections[voiceChannelID]; ok {
 		return conn, nil
 	}
@@ -209,7 +238,7 @@ func (conn *ActiveConnection) run() {
 
 		case <-time.After(500 * time.Millisecond):
 			// Shut down if no apps are running
-			if len(conn.appContainers) == 0 {
+			if len(conn.apps) == 0 {
 				return
 			}
 		}
@@ -221,69 +250,68 @@ func (a *ActiveConnection) ShutDown() {
 	a.wg.Wait()
 }
 
-func (conn *ActiveConnection) SendEvent(appName string, event string, msgChannelID string) error {
+func (conn *ActiveConnection) SendEvent(appName appType, event string, msgChannelID string) error {
 	return conn.SendEventWithArgs(appName, event, msgChannelID, []string{})
 }
 
-func (conn *ActiveConnection) SendEventWithArgs(appName string, event string, msgChannelID string, args []string) error {
+func (conn *ActiveConnection) SendEventWithArgs(
+	appName appType, event string, msgChannelID string, args []string,
+) error {
 	app, ok := conn.apps[appName]
 	if !ok {
-		return fmt.Errorf("Received command for unknown app: %s", appName)
-	}
-
-	if conn.getAppContainer(appName) == nil {
 		appCtx, appCancel := context.WithCancel(conn.container.ctx)
 		appContainer := &Container{
-			app_name:            appName,
+			appName:             appName,
 			session:             conn.container.session,
 			vc:                  conn.container.vc,
 			mu:                  conn.container.mu,
-			ctx:                 appCtx,
-			cancel:              appCancel,
+			playingNotification: conn.container.playingNotification,
 			pauseRequests:       conn.container.pauseRequests,
 			resumeRequests:      conn.container.resumeRequests,
+			ctx:                 appCtx,
+			cancel:              appCancel,
 			resumeRecveiver:     make(chan bool),
-			playingNotification: conn.container.playingNotification,
 		}
-		conn.insertAppContainer(appName, appContainer)
+		app = conn.appConstructors[appName](appContainer)
+		conn.insertApp(appName, app)
 		conn.wg.Add(1)
 
 		go func() {
-			log.Printf("Starting app %s for connection %s", appName, conn.container.vc.ChannelID)
+			log.Printf("Starting app %d for connection %s", appName, conn.container.vc.ChannelID)
 
 			defer conn.wg.Done()
-			defer conn.deleteAppContainer(appName)
+			defer conn.deleteApp(appName)
 			// Run spans the 'lifetime' of the app
-			err := app.Run(appContainer, msgChannelID)
+			err := app.Run(msgChannelID)
 			if err != nil {
 				log.Println(err)
 			}
 
-			log.Printf("Closed app %s for connection %s", appName, conn.container.vc.ChannelID)
+			log.Printf("Closed app %d for connection %s", appName, conn.container.vc.ChannelID)
 		}()
 
 	}
 	return app.SendEvent(event, args, msgChannelID)
 }
 
-func (conn *ActiveConnection) insertAppContainer(appName string, container *Container) {
+func (conn *ActiveConnection) insertApp(appName appType, app VoiceApp) {
 	conn.mu.Lock()
-	conn.appContainers[appName] = container
+	conn.apps[appName] = app
 	conn.mu.Unlock()
 }
 
-func (conn *ActiveConnection) deleteAppContainer(appName string) {
+func (conn *ActiveConnection) deleteApp(appName appType) {
 	conn.mu.Lock()
-	delete(conn.appContainers, appName)
+	delete(conn.apps, appName)
 	conn.mu.Unlock()
 }
 
-func (conn *ActiveConnection) getAppContainer(appName string) *Container {
+func (conn *ActiveConnection) getAppContainer(appName appType) *Container {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
-	container, ok := conn.appContainers[appName]
-	if ok && container != nil {
-		return container
+	app, ok := conn.apps[appName]
+	if ok && app != nil {
+		return app.Container()
 	}
 	return nil
 }

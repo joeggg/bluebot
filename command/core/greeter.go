@@ -6,26 +6,31 @@ import (
 )
 
 type Greeter struct {
+	container      *Container
+	c              chan string
 	running        bool
-	command        chan string
 	voiceSelection string
 }
 
-func NewGreeter() *Greeter {
-	return &Greeter{command: make(chan string)}
+func NewGreeter(container *Container) VoiceApp {
+	return &Greeter{container: container, c: make(chan string)}
+}
+
+func (g *Greeter) Container() *Container {
+	return g.container
 }
 
 func (g *Greeter) SendEvent(event string, args []string, channelID string) error {
-	g.command <- event
+	g.c <- event
 	return nil
 }
 
-func (g *Greeter) Run(container *Container, channelID string) error {
+func (g *Greeter) Run(channelID string) error {
 	select {
-	case command := <-g.command:
-		err := PlayText(command, "bluebot", container)
+	case command := <-g.c:
+		err := PlayText(command, "bluebot", g.container)
 		if err != nil {
-			log.Fatalln(err)
+			log.Println(err)
 		}
 	case <-time.After(time.Minute):
 	}

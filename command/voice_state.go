@@ -61,10 +61,10 @@ func greetUser(session *discordgo.Session, msg *discordgo.VoiceStateUpdate, user
 		text = phrase
 	}
 
-	conn, err := core.GetActiveConnection(session, msg.GuildID, msg.ChannelID, "")
+	conn, err := core.GetActiveConnection(session, msg.GuildID, msg.ChannelID)
 	if err != nil {
-		log.Fatalln(err)
+		log.Println(err)
 		return err
 	}
-	return conn.SendEvent("greeter", text, msg.ChannelID)
+	return conn.SendEvent(core.GreeterApp, text, msg.ChannelID)
 }

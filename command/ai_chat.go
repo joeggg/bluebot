@@ -57,12 +57,12 @@ func HandleResetChat(session *discordgo.Session, msg *discordgo.MessageCreate, a
 }
 
 func HandleListen(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
-	conn, err := core.GetActiveConnection(session, msg.GuildID, "", msg.Author.ID)
+	conn, err := core.GetActiveConnectionByAuthor(session, msg.GuildID, msg.Author.ID)
 	if err != nil {
-		log.Fatalln(err)
+		log.Println(err)
 		session.ChannelMessageSend(msg.ChannelID, "You're not in a voice channel")
 		return nil
 	}
-	conn.SendEvent("conv", "start", msg.ChannelID)
+	conn.SendEvent(core.AiApp, "start", msg.ChannelID)
 	return nil
 }
