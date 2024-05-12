@@ -2,6 +2,7 @@ package main
 
 import (
 	"bluebot/command"
+	"bluebot/command/core"
 	"bluebot/config"
 	"bluebot/util"
 	"log"
@@ -121,6 +122,7 @@ func main() {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
+	core.CloseActiveConnections()
 	discord.Close()
 	// Remove stored audio
 	err = os.RemoveAll(config.Cfg.AudioPath + "/*")

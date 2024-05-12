@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bluebot/command/core"
 	"bluebot/config"
 	"fmt"
 
@@ -18,7 +19,7 @@ func HandleTaxes(session *discordgo.Session, msg *discordgo.MessageCreate, args 
 }
 
 func HandleMemeOfTheDay(session *discordgo.Session, msg *discordgo.MessageCreate, args []string) error {
-	sck, err := NewWorkerSocket()
+	sck, err := core.NewWorkerSocket()
 	if err != nil {
 		return err
 	}

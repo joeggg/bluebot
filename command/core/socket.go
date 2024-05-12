@@ -1,4 +1,4 @@
-package command
+package core
 
 import (
 	"encoding/json"
