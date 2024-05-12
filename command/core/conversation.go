@@ -48,6 +48,7 @@ func GetAiText(sck *WorkerSocket, text string, uid string, personality string) (
 const (
 	downsampledFrameSize = 320
 	cutoffDelay          = 500 * time.Millisecond
+	inactivityTimeout    = 2 * time.Minute
 )
 
 type Conversation struct {
@@ -72,15 +73,14 @@ func (conv *Conversation) SendEvent(event string, args []string, channelID strin
 }
 
 func (conv *Conversation) Run(channelID string) error {
-	// Wake word detector
-	p := porcupine.Porcupine{
-		AccessKey: config.PorcupineToken,
-		BuiltInKeywords: []porcupine.BuiltInKeyword{
-			porcupine.PICOVOICE,
-			porcupine.COMPUTER,
-			porcupine.ALEXA,
-		},
+	wakeWords := []porcupine.BuiltInKeyword{}
+	personalities := []string{}
+	for personality, preset := range config.VoicePresets {
+		wakeWords = append(wakeWords, preset.WakeWord)
+		personalities = append(personalities, personality)
 	}
+	// Wake word detector
+	p := porcupine.Porcupine{AccessKey: config.PorcupineToken, BuiltInKeywords: wakeWords}
 	err := p.Init()
 	if err != nil {
 		return err
@@ -133,13 +133,10 @@ func (conv *Conversation) Run(channelID string) error {
 				log.Println(err)
 				continue
 			}
-			var personality string
-			if keywordIndex == 0 {
-				personality = "bluebot"
-			} else if keywordIndex == 1 {
-				personality = "best"
-			} else if keywordIndex == 2 {
-				personality = "mandarin"
+			personality := ""
+			// Is -1 when nothing heard, otherwise 0+ depending on the keyword detected
+			if keywordIndex >= 0 && keywordIndex < len(personalities) {
+				personality = personalities[keywordIndex]
 			} else {
 				continue
 			}
@@ -160,7 +157,7 @@ func (conv *Conversation) Run(channelID string) error {
 			}
 			go PlayText(response, personality, conv.container)
 
-		case <-time.After(time.Minute):
+		case <-time.After(inactivityTimeout):
 			log.Println("Exit listen due to inactivity")
 			return nil
 		}
@@ -237,6 +234,9 @@ func listenForAudioGoogle(
 	}
 
 	go func() {
+		// give some time to start speaking
+		delay := 5 * time.Second
+		count := 0
 		for {
 			select {
 			case <-container.ctx.Done():
@@ -257,8 +257,13 @@ func listenForAudioGoogle(
 					log.Printf("Error making audio request: %s", err)
 					continue
 				}
+				count++
+				// bit of a guess here from experimenting
+				if count > 20 {
+					delay = cutoffDelay
+				}
 
-			case <-time.After(cutoffDelay):
+			case <-time.After(delay):
 				if err = stream.CloseSend(); err != nil {
 					log.Printf("Error closing stream: %s", err)
 				}
@@ -279,7 +284,7 @@ func listenForAudioGoogle(
 		}
 
 		if len(resp.Results) < 1 || len(resp.Results[0].Alternatives) < 1 {
-			break
+			continue
 		}
 
 		result := resp.Results[0].Alternatives[0].Transcript

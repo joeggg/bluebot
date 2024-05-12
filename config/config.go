@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	porcupine "github.com/Picovoice/porcupine/binding/go/v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -46,11 +47,12 @@ type ImageSetting struct {
 }
 
 type VoicePreset struct {
-	Name     string  `json:"name"`
-	Language string  `json:"language"`
-	Pitch    float64 `json:"pitch"`
-	Rate     float64 `json:"rate"`
-	Gender   string  `json:"gender"`
+	Name     string                   `json:"name"`
+	Language string                   `json:"language"`
+	Pitch    float64                  `json:"pitch"`
+	Rate     float64                  `json:"rate"`
+	Gender   string                   `json:"gender"`
+	WakeWord porcupine.BuiltInKeyword `json:"wake_word"`
 }
 
 func LoadConfig() error {
