@@ -27,9 +27,33 @@ var (
 	BitRate    int = 64 * 1000
 )
 
+/*
+Plays text but with global caching for the whole running time.
+Should only be used for very common preset phrases
+*/
+func PlayGlobalText(text string, personality string, container *Container) error {
+	filename := fmt.Sprintf("%s/%s_%s_output.mp3", config.Cfg.AudioPath, personality, text)
+
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		start := time.Now()
+		err := generateVoice(text, personality, filename)
+		if err != nil {
+			return err
+		}
+		log.Printf("Took %f seconds to generate voice", time.Since(start).Seconds())
+	}
+
+	err := PlayMP3(container, filename)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func PlayText(text string, personality string, container *Container) error {
-	filename := fmt.Sprintf("%s/%s_output.mp3", config.Cfg.AudioPath, container.vc.ChannelID)
 	start := time.Now()
+	filename := fmt.Sprintf("%s/%s_output.mp3", config.Cfg.AudioPath, container.vc.ChannelID)
 	err := generateVoice(text, personality, filename)
 	if err != nil {
 		return err
@@ -53,6 +77,7 @@ func PlayMP3(container *Container, filename string) error {
 	if err != nil {
 		return err
 	}
+	defer os.Remove(filename)
 	defer file.Close()
 
 	var wg sync.WaitGroup

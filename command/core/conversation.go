@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/speech/apiv2"
@@ -143,7 +144,7 @@ func (conv *Conversation) Run(channelID string) error {
 				continue
 			}
 
-			if err = PlayText("hey", personality, conv.container); err != nil {
+			if err = PlayGlobalText("hey", personality, conv.container); err != nil {
 				log.Println(err)
 				continue
 			}
@@ -266,10 +267,11 @@ func listenForAudioGoogle(
 		}
 	}()
 
+	var terms []string
 	for {
 		resp, err := stream.Recv()
 		if err == io.EOF {
-			return "", nil
+			break
 		}
 		if err != nil {
 			log.Printf("Error receiving from stream: %s", err)
@@ -277,11 +279,14 @@ func listenForAudioGoogle(
 		}
 
 		if len(resp.Results) < 1 || len(resp.Results[0].Alternatives) < 1 {
-			return "", nil
+			break
 		}
 
 		result := resp.Results[0].Alternatives[0].Transcript
-		log.Println(result)
-		return result, nil
+		terms = append(terms, result)
 	}
+
+	result := strings.Join(terms, "")
+	log.Println(result)
+	return result, nil
 }
