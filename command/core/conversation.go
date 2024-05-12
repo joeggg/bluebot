@@ -2,16 +2,20 @@ package core
 
 import (
 	"bluebot/config"
-	"errors"
+	"bytes"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"time"
 
-	leopard "github.com/Picovoice/leopard/binding/go"
+	"cloud.google.com/go/speech/apiv2"
+	"cloud.google.com/go/speech/apiv2/speechpb"
 	porcupine "github.com/Picovoice/porcupine/binding/go/v2"
 	filters "github.com/mattetti/audio/dsp/filters"
 	"github.com/mattetti/audio/dsp/windows"
+	"google.golang.org/api/option"
 	"layeh.com/gopus"
 )
 
@@ -36,7 +40,7 @@ func GetAiText(sck *WorkerSocket, text string, uid string, personality string) (
 	if !ok {
 		return "", fmt.Errorf("failed to decode response: %s", resp)
 	}
-	log.Printf("Took %d seconds to get ai text", time.Since(start))
+	log.Printf("Took %f seconds to get ai text", time.Since(start).Seconds())
 	return data["response"].(string), nil
 }
 
@@ -81,13 +85,12 @@ func (conv *Conversation) Run(channelID string) error {
 		return err
 	}
 	defer p.Delete()
-	// Speech to text synthesiser
-	l := leopard.NewLeopard(config.PorcupineToken)
-	err = l.Init()
-	if err != nil {
-		return err
-	}
-	defer l.Delete()
+	// Speech to text
+	sptService, err := speech.NewClient(
+		conv.container.ctx,
+		option.WithCredentialsFile(config.Cfg.GoogleKeyPath),
+	)
+	defer sptService.Close()
 	// Backend communication (for OpenAI)
 	sck, err := NewWorkerSocket()
 	if err != nil {
@@ -144,7 +147,7 @@ func (conv *Conversation) Run(channelID string) error {
 				log.Println(err)
 				continue
 			}
-			transcript, err := listenForAudio(&l, audioIn, conv.container)
+			transcript, err := listenForAudioGoogle(sptService, audioIn, conv.container)
 			if err != nil {
 				log.Println(err)
 				continue
@@ -206,24 +209,79 @@ func readFrames(decoder *gopus.Decoder, audioIn chan []int16, container *Contain
 	}
 }
 
-func listenForAudio(l *leopard.Leopard, pcm_chan chan []int16, container *Container) (string, error) {
-	var data []int16
-	for {
-		select {
-		case <-container.ctx.Done():
-			return "", errors.New("Received cancel signal")
+func listenForAudioGoogle(
+	service *speech.Client, pcm_chan chan []int16, container *Container,
+) (string, error) {
+	stream, err := service.StreamingRecognize(container.ctx)
+	if err != nil {
+		return "", err
+	}
+	if err = stream.Send(&speechpb.StreamingRecognizeRequest{
+		Recognizer: "projects/primal-turbine-324300/locations/global/recognizers/bluebotg",
+		StreamingRequest: &speechpb.StreamingRecognizeRequest_StreamingConfig{
+			StreamingConfig: &speechpb.StreamingRecognitionConfig{
+				Config: &speechpb.RecognitionConfig{
+					DecodingConfig: &speechpb.RecognitionConfig_ExplicitDecodingConfig{
+						ExplicitDecodingConfig: &speechpb.ExplicitDecodingConfig{
+							Encoding:          speechpb.ExplicitDecodingConfig_LINEAR16,
+							SampleRateHertz:   16000,
+							AudioChannelCount: int32(Channels),
+						},
+					},
+				},
+			},
+		},
+	}); err != nil {
+		return "", err
+	}
 
-		case pcm := <-pcm_chan:
-			data = append(data, pcm...)
+	go func() {
+		for {
+			select {
+			case <-container.ctx.Done():
+				return
 
-		case <-time.After(cutoffDelay):
-			transcript, _, err := l.Process(data)
-			if err != nil {
-				return "", err
+			case pcm := <-pcm_chan:
+				buf := bytes.Buffer{}
+				for _, sample := range pcm {
+					binary.Write(&buf, binary.LittleEndian, sample)
+				}
+
+				if err = stream.Send(
+					&speechpb.StreamingRecognizeRequest{
+						Recognizer:       "projects/primal-turbine-324300/locations/global/recognizers/bluebotg",
+						StreamingRequest: &speechpb.StreamingRecognizeRequest_Audio{Audio: buf.Bytes()},
+					},
+				); err != nil {
+					log.Printf("Error making audio request: %s", err)
+					continue
+				}
+
+			case <-time.After(cutoffDelay):
+				if err = stream.CloseSend(); err != nil {
+					log.Printf("Error closing stream: %s", err)
+				}
+				return
 			}
-
-			log.Printf(transcript)
-			return transcript, nil
 		}
+	}()
+
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			return "", nil
+		}
+		if err != nil {
+			log.Printf("Error receiving from stream: %s", err)
+			return "", err
+		}
+
+		if len(resp.Results) < 1 || len(resp.Results[0].Alternatives) < 1 {
+			return "", nil
+		}
+
+		result := resp.Results[0].Alternatives[0].Transcript
+		log.Println(result)
+		return result, nil
 	}
 }

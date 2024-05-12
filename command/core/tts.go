@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/hajimehoshi/go-mp3"
 	"google.golang.org/api/option"
@@ -28,11 +29,12 @@ var (
 
 func PlayText(text string, personality string, container *Container) error {
 	filename := fmt.Sprintf("%s/%s_output.mp3", config.Cfg.AudioPath, container.vc.ChannelID)
-
+	start := time.Now()
 	err := generateVoice(text, personality, filename)
 	if err != nil {
 		return err
 	}
+	log.Printf("Took %f seconds to generate voice", time.Since(start).Seconds())
 
 	err = PlayMP3(container, filename)
 	if err != nil {
