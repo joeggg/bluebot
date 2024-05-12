@@ -28,7 +28,7 @@ func (g *Greeter) SendEvent(event string, args []string, channelID string) error
 func (g *Greeter) Run(channelID string) error {
 	select {
 	case command := <-g.c:
-		err := PlayGlobalText(command, "bluebot", g.container)
+		err := PlayText(command, "bluebot", g.container)
 		if err != nil {
 			log.Println(err)
 		}

@@ -2,6 +2,7 @@ package core
 
 import (
 	"bluebot/config"
+	"bluebot/util"
 	"context"
 	"encoding/base64"
 	"encoding/binary"
@@ -29,7 +30,8 @@ var (
 
 /*
 Plays text but with global caching for the whole running time.
-Should only be used for very common preset phrases
+Should only be used for very common preset phrases as uses the text to create
+the filename instead of using a random one
 */
 func PlayGlobalText(text string, personality string, container *Container) error {
 	filename := fmt.Sprintf("%s/%s_%s_output.mp3", config.Cfg.AudioPath, personality, text)
@@ -53,8 +55,14 @@ func PlayGlobalText(text string, personality string, container *Container) error
 
 func PlayText(text string, personality string, container *Container) error {
 	start := time.Now()
-	filename := fmt.Sprintf("%s/%s_output.mp3", config.Cfg.AudioPath, container.vc.ChannelID)
-	err := generateVoice(text, personality, filename)
+	hex, err := util.RandomHex(2)
+	if err != nil {
+		return err
+	}
+	filename := fmt.Sprintf(
+		"%s/%s_%s_output.mp3", config.Cfg.AudioPath, container.vc.ChannelID, hex,
+	)
+	err = generateVoice(text, personality, filename)
 	if err != nil {
 		return err
 	}
@@ -64,6 +72,7 @@ func PlayText(text string, personality string, container *Container) error {
 	if err != nil {
 		return err
 	}
+	os.Remove(filename)
 
 	return nil
 }
@@ -77,7 +86,6 @@ func PlayMP3(container *Container, filename string) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(filename)
 	defer file.Close()
 
 	var wg sync.WaitGroup
